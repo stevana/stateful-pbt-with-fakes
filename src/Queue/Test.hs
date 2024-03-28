@@ -1,18 +1,27 @@
-{-# LANGUAGE GADTs, StandaloneDeriving, Rank2Types, RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveFunctor            #-}
+{-# LANGUAGE GADTs                    #-}
+{-# LANGUAGE Rank2Types               #-}
+{-# LANGUAGE RecordWildCards          #-}
+{-# LANGUAGE ScopedTypeVariables      #-}
+{-# LANGUAGE StandaloneDeriving       #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE TypeApplications         #-}
 
-module MyLib where
+module Queue.Test where
 
-import Control.Exception
-import Test.QuickCheck
-import Test.QuickCheck.Poly
-import Data.IORef
-import Data.Array.IO
-import Data.Map (Map)
-import qualified Data.Map as Map
-import Data.Dynamic
-import Data.Typeable
+-- https://github.com/nick8325/quickcheck/issues/139
+
+import           Control.Exception
+import           Data.Array.IO
+import           Data.Dynamic
+import           Data.Either
+import           Data.IntMap          (IntMap)
+import qualified Data.IntMap          as Map
+import           Data.IORef
+import           Data.Kind
+import           Data.Typeable
+import           Test.QuickCheck
+import           Test.QuickCheck.Poly
 
 ------------------------------------------------------------------------
 -- Bounded queues, without any error checking.
@@ -22,6 +31,13 @@ data Queue a =
     queue_array :: IOArray Int a,
     queue_peek  :: IORef Int,
     queue_poke  :: IORef Int }
+
+-- XXX: can we avoid having to define Eq and Show?
+instance Eq (Queue a) where
+  (==) = undefined
+
+instance Show (Queue a) where
+  show = undefined
 
 new :: Int -> IO (Queue a)
 new n = do
@@ -71,6 +87,7 @@ data MQueue a = MQueue
   { capacity :: Int
   , content  :: [a]
   }
+  deriving Functor
 
 mNew :: Int -> MockOp (MQueue a)
 mNew n | n >= 0    = Right (MQueue n [])
@@ -90,6 +107,55 @@ mSize q = Right (length (content q), q)
 
 ------------------------------------------------------------------------
 
+type State = IntMap SomeMQueue
+
+type SomeMQueue = MQueue Dynamic
+
+initialState :: State
+initialState = Map.empty
+
+lookupQueue :: Typeable a => Var (Queue a) -> State -> MQueue a
+lookupQueue (Var i) m = fmap (flip fromDyn (error "lookupQueue")) (m Map.! i)
+
+updateQueue :: Typeable a => Var (Queue a) -> (MQueue a -> Either Err (b, MQueue a)) -> FakeOp b
+updateQueue (Var i) f s = undefined
+  -- Map.adjust (fmap toDyn . f . fmap (flip fromDyn (error "updateQueue"))) i s
+
+insertQueue :: Typeable a => MQueue a -> State -> (State, Var (Queue a))
+insertQueue q s =
+  let
+    i = Map.size s
+  in
+    (Map.insert i (fmap toDyn q) s, Var i)
+
+type FakeOp a = State -> Either Err (State, Either (Var a) a)
+
+fakeOp :: MockOp a -> FakeOp a
+fakeOp f s = undefined
+
+
+fNew :: Typeable a => Int -> FakeOp (Queue a)
+fNew n s = do
+  mq <- mNew n
+  let (s', v ) = insertQueue mq s
+  return (s', Left v)
+
+fPut :: Typeable a => a -> Var (Queue a) -> FakeOp ()
+fPut x q s = updateQueue q (mPut x) s
+  {-
+      m <- readIORef qs
+      let q = lookupMQueue i m
+      (r, q') <- runOp (mPut x q)
+      let m' = insertMQueue i q' m
+      writeIORef qs m'
+      return r
+-}
+
+fGet = undefined
+
+
+------------------------------------------------------------------------
+
 data QueueI q = QueueI
   { iNew  :: forall a. Typeable a => Int -> IO (q a)
   , iPut  :: forall a. Typeable a => a -> q a -> IO ()
@@ -106,56 +172,41 @@ runOp :: MockOp a -> IO a
 runOp op = either throwIO return op
 
 
-data SomeMQueue = forall a. Typeable a => SomeMQueue (MQueue a)
+lookupMQueue :: Typeable a => Int -> IntMap SomeMQueue -> MQueue a
+lookupMQueue i m = fmap (flip fromDyn (error "lookupMQueue")) (m Map.! i)
 
+insertMQueue :: Typeable a => Int -> MQueue a -> IntMap SomeMQueue -> IntMap SomeMQueue
+insertMQueue i q m = Map.insert i (fmap toDyn q) m
 
 fake :: IO (QueueI (Compose Var Queue))
 fake = do
-  qs <- newIORef Map.empty :: IO (IORef (Map Int SomeMQueue))
+  qs <- newIORef initialState :: IO (IORef State)
   let
-    fNew :: forall a. Typeable a => Int -> IO (Compose Var Queue a)
-    fNew n = atomicModifyIORef' qs (\m -> let i = Map.size m in (Map.insert i (SomeMQueue q) m, Compose (Var i)))
-      where
-        q :: MQueue a
-        q = MQueue n []
+    fNewIO :: forall a. Typeable a => Int -> IO (Compose Var Queue a)
+    fNewIO n = undefined -- atomicModifyIORef' qs (fmap Compose . fNew n)
 
-    fPut :: Typeable a => a -> Compose Var Queue a -> IO ()
-    fPut x (Compose (Var i)) = do
-      m <- readIORef qs
-      case m Map.! i of
-        SomeMQueue q_ -> case cast q_ of
-          Nothing -> error ""
-          Just q -> do
-            (r, q') <- runOp (mPut x q)
-            let m' = Map.insert i (SomeMQueue q') m
-            writeIORef qs m'
-            return r
+    fPutIO :: Typeable a => a -> Compose Var Queue a -> IO ()
+    fPutIO x (Compose q) = undefined -- atomicModifyIORef' qs (fPut x q)
 
     fGet :: Typeable a => Compose Var Queue a -> IO a
     fGet (Compose (Var i)) = do
       m <- readIORef qs
-      case m Map.! i of
-        SomeMQueue q_ -> case cast q_ of
-          Nothing -> error ""
-          Just q -> do
-            (r, q') <- runOp (mGet q)
-            let m' = Map.insert i (SomeMQueue q') m
-            writeIORef qs m'
-            return r
+      let q = lookupMQueue i m
+      (r, q') <- runOp (mGet q)
+      let m' = insertMQueue i q' m
+      writeIORef qs m'
+      return r
 
     fSize :: forall a. Typeable a => Compose Var Queue a -> IO Int
     fSize (Compose (Var i)) = do
       m <- readIORef qs
-      case m Map.! i of
-        SomeMQueue q_ -> case cast q_ of
-          Nothing -> error ""
-          Just (q :: MQueue a) -> do
-            (r, q') <- runOp (mSize q)
-            let m' = Map.insert i (SomeMQueue q') m
-            writeIORef qs m'
-            return r
+      let q = lookupMQueue i m :: MQueue a
+      (r, q') <- runOp (mSize q)
+      let m' = insertMQueue i (fmap toDyn q') m
+      writeIORef qs m'
+      return r
 
-  return (QueueI fNew fPut fGet fSize)
+  return (QueueI fNewIO fPutIO fGet fSize)
 
 prog :: forall q. QueueI q -> IO ()
 prog i = do
@@ -179,17 +230,17 @@ test = do
 
 ------------------------------------------------------------------------
 
--- Testing, stuff specific to this example.
+runFake :: forall a. State -> Command a -> Either Err (State, Either (Var a) a)
+runFake s (New n)   = fNew n s
+runFake s (Put x q) = undefined
+runFake s (Get q)   = do
+  let mq :: MQueue a
+      mq = lookupQueue q s
+  (x, _q') <- mGet mq
+  return (s, Right x)
+runFake s (Size q)  = undefined
 
-data State =
-    NoQueue
-  | HaveQueue {
-      state_queue    :: Var (Queue A),
-      state_capacity :: Int,
-      state_contents :: [A] }
-
-initialState :: State
-initialState = NoQueue
+------------------------------------------------------------------------
 
 data Command a where
   New  :: Int -> Command (Queue A)
@@ -199,24 +250,47 @@ data Command a where
 deriving instance Show (Command a)
 
 runCommand :: Env -> Command a -> IO a
-runCommand _ (New n) = new n
+runCommand _ (New n)       = new n
 runCommand env (Put x ref) = put x (env ref)
-runCommand env (Get ref) = get (env ref)
-runCommand env (Size ref) = size (env ref)
-
-genCommand :: State -> Gen (Untyped Command)
-genCommand NoQueue = fmap (Untyped . New) arbitrary
-genCommand HaveQueue{..} =
-  oneof [
-    fmap (Untyped . flip Put state_queue) arbitrary,
-    return (Untyped (Get state_queue)),
-    return (Untyped (Size state_queue))]
+runCommand env (Get ref)   = get (env ref)
+runCommand env (Size ref)  = size (env ref)
 
 shrinkCommand :: Command a -> [Command a]
-shrinkCommand (New n) = map New (shrink n)
+shrinkCommand (New n)   = map New (shrink n)
 shrinkCommand (Put x q) = map (flip Put q) (shrink x)
-shrinkCommand _ = []
+shrinkCommand _         = []
 
+pre :: Command a -> State -> Bool
+pre cmd s = isRight (runFake s cmd)
+
+post :: (Eq a, Show a) => Command a -> a -> State -> Property
+post cmd resp s = case runFake s cmd of
+  Left err -> counterexample (show err) (property False)
+  Right (_s', Right resp') -> resp === resp'
+  Right (_s', Left _)      -> property True -- XXX?
+
+nextState :: Command a -> Var a -> State -> State
+nextState cmd q s = case runFake s cmd of
+  Left err -> error ("nextState: " ++ show err)
+  Right (s', _) -> s'
+
+genCommand :: State -> Gen (Untyped Command)
+genCommand s
+  | Map.null s = Untyped <$> (New <$> arbitrary)
+  | otherwise  =
+      frequency
+        [ (3, Untyped <$> (Put <$> arbitrary <*> arbitraryQueue s))
+        , (5, Untyped <$> (Get <$> arbitraryQueue s))
+        , (1, Untyped <$> (New <$> arbitrary))
+        ]
+
+arbitraryQueue :: Typeable a => State -> Gen (Var (Queue a))
+arbitraryQueue s = do
+  i <- choose (0, Map.size s - 1)
+  return (Var i)
+
+
+{-
 pre :: Command a -> State -> Bool
 pre New{} HaveQueue{} = False
 pre (New n) NoQueue = n >= 0
@@ -243,6 +317,7 @@ nextState (Get q) _ state@HaveQueue{state_contents = _:xs} =
   state{state_contents = xs}
 nextState (Size _) _ s = s
 
+-}
 prop_ok cmds = runCommands cmds
 
 ------------------------------------------------------------------------
@@ -254,11 +329,11 @@ type Env = forall a. Typeable a => Var a -> a
 newtype Commands = Commands [Cmd] deriving Show
 data Cmd where
   -- A command together with its result
-  Cmd :: forall a. Typeable a => Command a -> Var a -> Cmd
+  Cmd :: forall a. (Typeable a, Eq a, Show a) => Command a -> Var a -> Cmd
 deriving instance Show Cmd
 
 data Untyped f where
-  Untyped :: Typeable a => f a -> Untyped f
+  Untyped :: (Typeable a, Eq a, Show a) => f a -> Untyped f
 
 instance Arbitrary Commands where
   arbitrary = Commands <$> do
@@ -299,7 +374,7 @@ runCommands (Commands cmds) = runCmds initialState [] cmds
       counterexample (show cmd) $ ioProperty $ do
         res <- runCommand (sub vals) cmd
         return $
-          post (sub vals) cmd res state .&&.
+          post cmd res state .&&.
             let next = nextState cmd var state in
             runCmds next ((x, toDyn res):vals) cmds
 
@@ -310,5 +385,5 @@ runCommands (Commands cmds) = runCmds initialState [] cmds
           -- ^ this can happen if a shrink step makes a variable unbound
         Just val ->
           case fromDynamic val of
-            Nothing -> error $ "variable " ++ show x ++ " has wrong type"
+            Nothing  -> error $ "variable " ++ show x ++ " has wrong type"
             Just val -> val

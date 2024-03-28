@@ -1,4 +1,4 @@
-# Revision history for qsm-mini-lockstep
+# Revision history for stateful-pbt-with-fakes
 
 ## 0.0.0 -- YYYY-mm-dd
 
