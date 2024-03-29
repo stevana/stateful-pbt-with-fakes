@@ -86,9 +86,11 @@ mistake.
 | Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ] </li></ul> | |
 | PropEr | Erlang | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | First open source library to support both? |
-| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been closed [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
-
+| rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) from 2015. |
+| SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) from 2016. |
 
 
 * Original Haskell QuickCheck implementation still today has an open issue about
@@ -134,11 +136,7 @@ mistake.
 * TypeScript's fast-check, has some support for race condition checking of stateful programs
   https://fast-check.dev/docs/advanced/race-conditions/
 
-* JavaScript's jsverify, no support for stateful testing https://github.com/jsverify/jsverify/issues/148
 
-* Swift's SwiftCheck https://github.com/typelift/SwiftCheck/issues/149 no support for stateful testing
-
-* Ruby's [rantly](https://github.com/rantly-rb/rantly) no support for stateful testing
 
 ## Why are property-based testing libraries in a sad state and what can we do about it?
 
