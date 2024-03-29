@@ -70,6 +70,23 @@ was founded in 2006
 
 ## A survey of (the sad state of) property-based testing libraries
 
+Let me be clear up front that I've not used all of these libraries. My
+understanding comes from reading the documentation, issue tracker and sometimes
+source code.
+
+To my best knowledge, as of March 2024, the following table summarises the
+situation. Please open an
+[issue](https://github.com/stevana/stateful-pbt-with-fakes/issues) if you see a
+mistake.
+
+| Library | Language | Stateful | Parallel | Notes |
+| :---    | :---     | :---:    | :---:    | :---  |
+| ScalaCheck | Scala | | <ul><li>- [x]</li></ul> | <ul><li>- [ ]</li></ul> | Has some support for parallel testing, but it's limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`). |
+| Gopter | Go | <ul><li>- [x]</li></ul> | <ul><li>- [ ]</li></ul> | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
+| Rapid | Go | <ul><li>- [x]</li></ul> | <ul><li>- [ ]</li></ul> | |
+| Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ]</li></ul> | |
+
+
 * Original Haskell QuickCheck implementation still today has an open issue about
   adding state machine based test
   https://github.com/nick8325/quickcheck/issues/139
@@ -82,33 +99,8 @@ was founded in 2006
 * Haskell's Hedgehog, has parallel support, but the implementation has issues
   https://github.com/hedgehogqa/haskell-hedgehog/issues/104
 
-* https://github.com/leanovate/gopter , readme says "No parallel commands ... yet?"
-  + https://github.com/leanovate/gopter/issues/20
-* https://github.com/flyingmutant/rapid/ no support for parallel
 
-* ScalaCheck
-  + https://github.com/typelevel/scalacheck/blob/main/core/shared/src/main/scala/org/scalacheck/commands/Commands.scala#L181
 
-    /** A property that can be used to test this [[Commands]] specification.
-     *
-     * The parameter `threadCount` specifies the number of commands that might be executed in parallel. Defaults to one,
-     * which means the commands will only be run serially for the same [[Sut]] instance. Distinct [[Sut]] instances might
-     * still receive commands in parallel, if the [[Test.Parameters.workers]] parameter is larger than one. Setting
-     * `threadCount` higher than one enables ScalaCheck to reveal thread-related issues in your system under test.
-     *
-     * When setting `threadCount` larger than one, ScalaCheck must evaluate all possible command interleavings (and the
-     * end [[State]] instances they produce), since parallel command execution is non-deterministic. ScalaCheck tries out
-     * all possible end states with the [[Command.postCondition]] function of the very last command executed (there is
-     * always exactly one command executed after all parallel command executions). If it fails to find an end state that
-     * satisfies the postcondition, the test fails. However, the number of possible end states grows rapidly with
-     * increasing values of `threadCount`. Therefore, the lengths of the parallel command sequences are limited so that
-     * the number of possible end states don't exceed `maxParComb`. The default value of `maxParComb` is 1000000.
-     */
-
-  + leveldb and redis examples use threadCount = 1
-     https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples
-
-* Python's https://hypothesis.readthedocs.io/en/latest/stateful.html , no parallel support
 
 * Erlang's PropEr, has support
 
@@ -190,7 +182,7 @@ $f : A \to B$ by randomly generating its argument ($A$) and then checking that
 some predicate ($P : B \to Bool$) on the output holds.
 
 For example let's say that the function we want to test is a list reversal
-function ($reverse), then the argument we need to randomly generate is a list,
+function ($reverse$), then the argument we need to randomly generate is a list,
 and the predicate can be anything we'd like to hold for our list reversal
 function, for example we can specify that reversing the result of rerversal
 gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
