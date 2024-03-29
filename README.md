@@ -91,6 +91,10 @@ mistake.
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) from 2015. |
 | SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) from 2016. |
+| propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) from 2020. |
+| jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
+| QuickTheories | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less.
+". |
 
 
 * Original Haskell QuickCheck implementation still today has an open issue about
@@ -107,21 +111,8 @@ mistake.
 
 
 
-* Elixir's propcheck, no support for parallel https://github.com/alfert/propcheck/issues/148
 
-* jetCheck
-  >  * Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.
 
-*  Java's QuickTheories:
-  - experimental https://github.com/quicktheories/QuickTheories/issues/42
-
->    * Supplied commands will first be run in sequence and compared against the model,
-   * then run concurrently. All possible valid end states of the system will be
-   * calculated, then the actual end state compared to this.
-   *
-   * As the number of possible end states increases rapidly with the number of commands,
-   * command lists should usually be constrained to 10 or less.
-   https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35
 
 * F#'s FsCheck, experimental stateful testing
   https://fscheck.github.io/FsCheck//StatefulTestingNew.html , no parallel
