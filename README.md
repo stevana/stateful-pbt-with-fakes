@@ -82,9 +82,9 @@ mistake.
 | Library | Language | Stateful | Parallel | Notes |
 | :---    | :---     | :---:    | :---:    | :---  |
 | ScalaCheck | Scala | | <ul><li>- [x]</li></ul> | <ul><li>- [ ]</li></ul> | Has some support for parallel testing, but it's limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`). |
-| Gopter | Go | <ul><li>- [x]</li></ul> | <ul><li>- [ ]</li></ul> | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
-| Rapid | Go | <ul><li>- [x]</li></ul> | <ul><li>- [ ]</li></ul> | |
-| Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ]</li></ul> | |
+| Gopter | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
+| Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ] </li></ul> | |
 
 
 * Original Haskell QuickCheck implementation still today has an open issue about
