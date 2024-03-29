@@ -86,7 +86,7 @@ mistake.
 | Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ] </li></ul> | |
 | PropEr | Erlang | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | First open source library to support both? |
-| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> | - [ ] </li></ul> | Issue to add stateful testing has been closed [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been closed [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 
 
