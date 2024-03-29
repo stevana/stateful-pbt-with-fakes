@@ -85,6 +85,10 @@ mistake.
 | Gopter | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
 | Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ] </li></ul> | |
+| PropEr | Erlang | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | First open source library to support both? |
+| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> | - [ ] </li></ul> | Issue to add stateful testing has been closed [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
+
 
 
 * Original Haskell QuickCheck implementation still today has an open issue about
@@ -100,9 +104,6 @@ mistake.
   https://github.com/hedgehogqa/haskell-hedgehog/issues/104
 
 
-
-
-* Erlang's PropEr, has support
 
 * Elixir's propcheck, no support for parallel https://github.com/alfert/propcheck/issues/148
 
@@ -127,20 +128,6 @@ mistake.
 * https://github.com/clojure/test.check , no support for stateful testing
   someone has implemented it in a blog post though?
   http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/
-
-* Rust's quickcheck https://github.com/BurntSushi/quickcheck/issues/134 no
-  support for stateful testing
-  [issue](https://github.com/BurntSushi/quickcheck/issues/134) closed
-
-   > Unfortunately, I don't really have the bandwidth to contemplate models of
-   > property based testing that are different from how quickcheck currently
-   > works.
-
-* Rust's https://github.com/proptest-rs has a companion crate called
-https://crates.io/crates/proptest-state-machine the docs say:
-
-  > Currently, only sequential strategy is supported, but a concurrent strategy
-  > is planned to be added at later point.
 
 * C++'s RapidCheck https://github.com/emil-e/rapidcheck/issues/47 , no parallel support
 
