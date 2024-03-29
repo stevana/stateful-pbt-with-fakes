@@ -1,4 +1,4 @@
-# Stateful property-based testing in 150 LOC
+# Getting the most out of property-based testing
 
 Property-based testing is a rare example of academic research that has made it
 to the mainstream in less than 30 years.
@@ -7,40 +7,51 @@ Under the slogan "don't write tests, generate them" property-based testing has
 gained support from a diverse group of programming language communities.
 
 The original Haskell QuickCheck implementation has been ported to 39 languages,
-according to Wikipedia, and some languages even have multiple implementations.
+according to [Wikipedia](https://en.wikipedia.org/wiki/QuickCheck), and some
+languages even have multiple implementations.
 
 In this post I'd like to explain how most of those 39+ implementations do not
 help its users to fully exploit the power of property-based testing.
 
-In order to explain why I think we've ended up in this situation, I'll give you
-a breif history of property-based testing.
+In order to explain what I mean by this and why I think we've ended up in this
+situation, I need to give you a breif history of property-based testing first.
 
-In this post:
+## The history of property-based testing
 
-  3. show how one can implement stateful property-based testing in 150 lines of code.
-     This is the first step, I'll show how to add parallel testing in a follow up post
+* John Hughes had a week off, just for fun project, Koen stuck his head into the office
+  - https://youtu.be/x4BNj7mVTkw?t=289
+  - inspired by formal methods
 
-  4. put this technique in context of software development at large.
+Property-based testing (PBT) was first introduced by Koen Claessen and John
+Hughes in their paper [*QuickCheck: A Lightweight Tool for Random Testing of
+Haskell
+Programs*](https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf)
+(ICFP 2000).
 
-## History
+I think it's worth stressing the *lightweight tool* part from the paper's title,
+the source code for the [first
+version](https://github.com/Rewbert/quickcheck-v1) of the library is included in
+the appendix of the paper and it's about 300 lines of code.
 
-* John Hughes and Koen Claessen write QuickCheck
-  + https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf (ICFP 2000)
+Haskell is a pure functional programming language, meaning that it's possible at
+the type-level to distinguish whether a function has side-effects or not.
 
-  + https://github.com/Rewbert/quickcheck-v1
+Probably as a result of this, the first version of QuickCheck can only test
+pure functions. This shortcoming was rectified in the follow up paper [*Testing
+monadic code with
+QuickCheck*](https://www.cse.chalmers.se/~rjmh/Papers/QuickCheckST.ps) (2002) by
+the same authors.
 
-* *Testing monadic code with QuickCheck*
-  https://www.cse.chalmers.se/~rjmh/Papers/QuickCheckST.ps (2002)
-
-* John Hughes was applying for a grant at the Swedish Strategic Research
-  Foundation, part of this process involved pitching in front of a panel of
-  people from industry, some person from Ericsson was on this panel and they
-  were interested in the tool, there was also a woman who I forgot the name of
-  but she is a serial entrepreneur and she encouraged John to start a company,
-  and the Ericsson person agreed to be a first customer, and so QuiviQ was
-  founded
-  https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/
-  http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes
+Around the same time John Hughes was applying for a major grant at the Swedish
+Strategic Research Foundation, part of this process involved pitching in front
+of a panel of people from industry, some person from Ericsson was on this panel
+and they were interested in the tool, there was also a woman who I forgot the
+name of but she is a serial entrepreneur and she encouraged John to start a
+company, and the Ericsson person agreed to be a first customer, and so QuiviQ
+was founded in 2006
+  + is there a source for this story?
+ + https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/ (2002-2006)
+ + http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes (2002-2005?)
 
 * Ericsson's system was written in Erlang and was stateful and concurrent, so
   the original formulation of QuickCheck wasn't enough
@@ -52,22 +63,24 @@ In this post:
   - the combination of the above is what i mean by full potential and it can only
     be found in a couple of open source libraries
 
-* [Finding Race Conditions in Erlang with QuickCheck and PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+* [Finding Race Conditions in Erlang with QuickCheck and PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf) (ICFP 2009)
+  + [Linearizability: a correctness condition for concurrent objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
+  + Jepsen's knossos checker
+    + also does fault injection
 
-* [Linearizability: a correctness condition for concurrent objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
-* Jepsen's knossos checker
-  + also does fault injection
+## A survey of (the sad state of) property-based testing libraries
 
 * Original Haskell QuickCheck implementation still today has an open issue about
   adding state machine based test
   https://github.com/nick8325/quickcheck/issues/139
 
-* qsm
+* Haskell's qsm
   + 2017-2018
   + second open source library, after https://github.com/proper-testing/proper,
     to offer parallel stateful property-based testing
 
-## A survey of property-based testing libraries
+* Haskell's Hedgehog, has parallel support, but the implementation has issues
+  https://github.com/hedgehogqa/haskell-hedgehog/issues/104
 
 * https://github.com/leanovate/gopter , readme says "No parallel commands ... yet?"
   + https://github.com/leanovate/gopter/issues/20
@@ -148,55 +161,66 @@ https://crates.io/crates/proptest-state-machine the docs say:
 
 * Ruby's [rantly](https://github.com/rantly-rb/rantly) no support for stateful testing
 
-* Haskell's Hedgehog, has parallel support, but the implementation has issues
-  https://github.com/hedgehogqa/haskell-hedgehog/issues/104
-
-## Why isn't stateful and parallel testing more widespread?
+## Why are property-based testing libraries in a sad state and what can we do about it?
 
 1. Not as useful as testing pure functions?
 2. More difficult/work to model?
+  + john hughes [says](https://youtu.be/x4BNj7mVTkw?t=898) testing this way
+    requires a bit different way of thinking and you can't just give people the
+    tool
+
 3. No concise code to port?
+
+  + Part of the original implementations spread to other languages can perhaps
+    be attributed to the fact that the original implementation is small, around
+    300 lines of code?
+
+In this post:
+
+  3. show how one can implement stateful property-based testing in 150 lines of code.
+     This is the first step, I'll show how to add parallel testing in a follow up post
+
+  4. put this technique in context of software development at large.
 
 
 ## QuickCheck recap (stateless property-based testing)
 
 The original idea is that we can test some pure (or side-effect free) function
-$f : A -> B$ by randomly generating its argument ($A$) and then checking that
-some predicate ($P : B -> Bool$) on the output holds.
+$f : A \to B$ by randomly generating its argument ($A$) and then checking that
+some predicate ($P : B \to Bool$) on the output holds.
 
 For example let's say that the function we want to test is a list reversal
 function ($reverse), then the argument we need to randomly generate is a list,
 and the predicate can be anything we'd like to hold for our list reversal
 function, for example we can specify that reversing the result of rerversal
-gives back the original list, i.e. $reverse(reverse(xs)) == xs$.
+gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
 
 * Involution, and other common properties
 
 * Most tutorials on property-based testing only cover testing pure functions
 
+## Stateful property-based testing in ~150 LOC
 
 
-Part of it's spread to other languages can no doubt be attributed to the fact
-that the original implementation is small, around 300 lines of code.
+## Parallel property-based testing in ~300 LOC
+
+## Contract tested fakes
 
 
-This of course wasn't an accident, we don't need to look further than the title
-of the original paper: "QuickCheck: *A Lightweight Tool* for Random Testing of
-Haskell Programs" (mine emphasis).
+## Future work
 
-For those who haven't heard of property-based testing it can perhaps best be
-explained by the slogan: "don't write tests, generate them".
+Having a compact code base makes it cheaper to make experimental changes.
 
-* example
-
-
-## Stateful property-based testing
-
+* Fault injection
+* Simulation testing
+  - Always and sometimes combinators?
+* Can we use
+  [`MonadAsync`](https://hackage.haskell.org/package/io-classes-1.4.1.0/docs/Control-Monad-Class-MonadAsync.html)
+  and [IOSim](https://hackage.haskell.org/package/io-sim) to make parallel testing deterministic?
 
 
 ## See also
 
-* https://en.wikipedia.org/wiki/QuickCheck
 
 * https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 * https://www.cse.chalmers.se/~rjmh/MGS2019/
@@ -205,3 +229,12 @@ explained by the slogan: "don't write tests, generate them".
 * [Experiences with QuickCheck: Testing the Hard Stuff and Staying
   Sane](https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quviq-testing.pdf)
   - https://www.youtube.com/watch?v=zi0rHwfiX1Q
+
+* [How to specify it! A Guide to Writing Properties of Pure
+  Functions](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf) (2020)
+
+  + https://www.youtube.com/watch?v=zvRAyq5wj38
+
+
+* [Building on developers' intuitions to create effective property-based
+  tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
