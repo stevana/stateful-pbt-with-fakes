@@ -1,4 +1,4 @@
-# Getting the most out of property-based testing
+# The sad state of property-based testing libraries
 
 Property-based testing is a rare example of academic research that has made it
 to the mainstream in less than 30 years.
@@ -18,18 +18,60 @@ situation, I need to give you a breif history of property-based testing first.
 
 ## The history of property-based testing
 
-* John Hughes had a week off, just for fun project, Koen stuck his head into the office
-  - https://youtu.be/x4BNj7mVTkw?t=289
-  - inspired by formal methods
+In Gothenburg, Sweden's second most populated city, there's a university called
+Chalmers. At the computer science department of Chalmers there are several
+research groups, two of which are particularly relevant to our story -- the
+*Functional Programming* group and *Programming Logic* group. I'll let you guess
+what the former group's main interest is. The latter group's mostly conserned
+with a branch of functional programming where the type system is sufficiently
+expressive that it allows for formal specifications of programs, sometimes
+called dependently typed programming or type theory. Given the overlap of
+interest and proximity, researchers at the department are sometimes part of both
+groups or at least visit each others research seminars from time to time.
 
-Property-based testing (PBT) was first introduced by Koen Claessen and John
-Hughes in their paper [*QuickCheck: A Lightweight Tool for Random Testing of
-Haskell
+John Hughes is a long-time member of the Functional Programming group, who's
+also well aware of the research on dependently typed programming going on in the
+Programming Logic group. One day in the late nineties, after having worked hard
+on finishing something important on time, John found himself having a week
+"off".
+
+So, just for fun, he started experimenting with the idea of testing if a program
+respects a formal specification. Typically in dependently typed programming you
+use the types to write the specification and then the program that implements
+that type is the formal proof that the program is correct.
+
+For example, let's say you've implemented a list sorting function, the
+specification typically then is that the output of the sorting function is
+ordered, i.e. for any index $i$ in your output list the element at that index
+must be smaller or equal to the element at index $i + 1$.
+
+Formally proving that a program is correct with respect to a specification is
+often as much work as writing the program in the first place, so merely testing
+it can often be a sweet spot where you get some confidence that the
+specification is correct, without having to do the proving work. For example in
+the sorting example you can simply compare the output of your sorting function
+with the one in the standard library (which is very likely to be correct).
+
+As programs get more complicted the ratio of effort saved by merely testing, as
+opposed to proving, increases. In fact for bigger programs the effort involved
+in proving correctness is simply too high for it to be practical (this is an
+active area of research). Given all this, I hope you can at least start to see
+why this idea excited John.
+
+While John was working on this idea, Koen Claessen, another member of the
+Functional Programing group, [stuck his
+head](https://youtu.be/x4BNj7mVTkw?t=289) into John's office and asked what he
+was doing. Koen too quickly got excited and came back the next day with his
+improved version of John's code. There was some things that Koen hadn't thought
+about, so John iterated on his code and so it went back and forth for a week
+until the first implementation of property-based testing was written and not
+long after they publised the paper [*QuickCheck: A Lightweight Tool for Random
+Testing of Haskell
 Programs*](https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf)
 (ICFP 2000).
 
 I think it's worth stressing the *lightweight tool* part from the paper's title,
-the source code for the [first
+the complete source code for the [first
 version](https://github.com/Rewbert/quickcheck-v1) of the library is included in
 the appendix of the paper and it's about 300 lines of code.
 
@@ -44,10 +86,10 @@ the same authors.
 
 Around the same time John Hughes was applying for a major grant at the Swedish
 Strategic Research Foundation, part of this process involved pitching in front
-of a panel of people from industry, some person from Ericsson was on this panel
+of a panel of people from industry. Some person from Ericsson was on this panel
 and they were interested in the tool, there was also a woman who I forgot the
 name of but she is a serial entrepreneur and she encouraged John to start a
-company, and the Ericsson person agreed to be a first customer, and so QuiviQ
+company, and the Ericsson person agreed to be a first customer, and so Quviq
 was founded in 2006
   + is there a source for this story?
  + https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/ (2002-2006)
@@ -68,16 +110,16 @@ was founded in 2006
   + Jepsen's knossos checker
     + also does fault injection
 
-## A survey of (the sad state of) property-based testing libraries
+## A survey of property-based testing libraries
 
 Let me be clear up front that I've not used all of these libraries. My
 understanding comes from reading the documentation, issue tracker and sometimes
 source code.
 
-To my best knowledge, as of March 2024, the following table summarises the
+To my best knowledge, as of April 2024, the following table summarises the
 situation. Please open an
-[issue](https://github.com/stevana/stateful-pbt-with-fakes/issues) if you see a
-mistake.
+[issue](https://github.com/stevana/stateful-pbt-with-fakes/issues) (or PR) if
+you see a mistake or an important omission.
 
 | Library | Language | Stateful | Parallel | Notes |
 | :---    | :---     | :---:    | :---:    | :---  |
@@ -90,36 +132,17 @@ mistake.
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) from 2015. |
+| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking of stateful programs, it's not clear to me how it relates to Quviq's Erlang QuickcCheck's parallel testing though. |
 | SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) from 2016. |
 | propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) from 2020. |
 | jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
 | QuickTheories | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less." |
 | FsCheck | F# | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016. |
 | test.check | Clojure | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
-| RapidCheck | C++ | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
-
-
-
-* Original Haskell QuickCheck implementation still today has an open issue about
-  adding state machine based test
-  https://github.com/nick8325/quickcheck/issues/139
-
-* Haskell's qsm
-  + 2017-2018
-  + second open source library, after https://github.com/proper-testing/proper,
-    to offer parallel stateful property-based testing
-
-* Haskell's Hedgehog, has parallel support, but the implementation has issues
-  https://github.com/hedgehogqa/haskell-hedgehog/issues/104
-
-
-
-
-
-* TypeScript's fast-check, has some support for race condition checking of stateful programs
-  https://fast-check.dev/docs/advanced/race-conditions/
-
-
+| RapidCheck | C++ | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
+| QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Open [issue](https://github.com/nick8325/quickcheck/issues/139) since 2016. |
+| Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104) |
+| quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
 
 ## Why are property-based testing libraries in a sad state and what can we do about it?
 
@@ -156,6 +179,33 @@ function, for example we can specify that reversing the result of rerversal
 gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
 
 * Involution, and other common properties
+
+
+   7   │ Before we get into how to apply property-based testing (PBT) to stateful
+   8   │ systems, lets recall what PBT of pure programs looks like. Here are a few
+   9   │ typical examples:
+  10   │
+  11   │ - `forall (xs : List Int). reverse (reverse xs) == xs`
+  12   │ - `forall (i : Input). deserialise (serialise i) == i`
+  13   │ - `forall (xs : List Int). sort (sort xs) == sort xs`
+  14   │ - `forall (i j k : Int). (i + j) + k == i + (j + k)`
+  15   │ - `forall (x : Int, xs : List Int). member x (insert x xs) && not (member x (remove x xs))`
+  16   │
+  17   │ The idea is that we quantify over some inputs (left-hand side of the `.` above)
+  18   │ which the PBT library will instantiate to random values before checking the
+  19   │ property (right-hand side). In effect the PBT library will generate unit tests,
+  20   │ e.g. the list `[1, 2, 3]` can be generated and reversing that list twice will
+  21   │ give back the same list. How many unit tests are generated can be controlled via
+  22   │ a parameter of the PBT library.
+  23   │
+  24   │ Typical properties to check for include: involution (reverse example above),
+  25   │ inverses (serialise example), idempotency (sort example), associativity
+  26   │ (addition example), axioms of abstract datatypes (member example) etc. Readers
+  27   │ familiar with discrete math might also notice the structural similarity of PBT
+  28   │ with proof by induction, in a sense: the more unit tests we generate the closer
+  29   │ we come to approximating proof by induction (not quite true but could be a
+  30   │ helpful analogy for now, we'll come back to this later).
+
 
 * Most tutorials on property-based testing only cover testing pure functions
 
@@ -198,3 +248,8 @@ Having a compact code base makes it cheaper to make experimental changes.
 
 * [Building on developers' intuitions to create effective property-based
   tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
+
+* [Testing telecoms software with Quviq
+  QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
+  (2006)
+* [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
