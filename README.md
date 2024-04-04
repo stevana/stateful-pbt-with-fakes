@@ -6,15 +6,18 @@ to the mainstream in less than 30 years.
 Under the slogan "don't write tests, generate them" property-based testing has
 gained support from a diverse group of programming language communities.
 
-The original Haskell QuickCheck implementation has been ported to 39 languages,
-according to [Wikipedia](https://en.wikipedia.org/wiki/QuickCheck), and some
-languages even have multiple implementations.
+In fact, the [Wikipedia](https://en.wikipedia.org/wiki/QuickCheck) page for the
+original Haskell QuickCheck implementation lists 57 reimplementations in other
+languages.
 
-In this post I'd like to explain how most of those 39+ implementations do not
-help its users to fully exploit the power of property-based testing.
+In this post I'd like to survey the most popular property-based testing
+implementations and compare them with the state-of-the-art.
 
-In order to explain what I mean by this and why I think we've ended up in this
-situation, I need to give you a breif history of property-based testing first.
+As the title already gives away, most of the libraries do not offer their users
+the most advanced property-based testing features.
+
+In order to best explain what's missing and why I think we ended up in this
+situation, let me start by telling the brief history of property-based testing.
 
 ## The history of property-based testing
 
@@ -75,8 +78,9 @@ the complete source code for the [first
 version](https://github.com/Rewbert/quickcheck-v1) of the library is included in
 the appendix of the paper and it's about 300 lines of code.
 
-Haskell is a pure functional programming language, meaning that it's possible at
-the type-level to distinguish whether a function has side-effects or not.
+Haskell and dependently typed programming languages are pure functional
+programming languages, meaning that it's possible at the type-level to
+distinguish whether a function has side-effects or not.
 
 Probably as a result of this, the first version of QuickCheck can only test
 pure functions. This shortcoming was rectified in the follow up paper [*Testing
@@ -84,13 +88,14 @@ monadic code with
 QuickCheck*](https://www.cse.chalmers.se/~rjmh/Papers/QuickCheckST.ps) (2002) by
 the same authors.
 
+XXX: example, file i/o, networking, concurrency, atomics / lock free queues?
+
 Around the same time John Hughes was applying for a major grant at the Swedish
 Strategic Research Foundation, part of this process involved pitching in front
 of a panel of people from industry. Some person from Ericsson was on this panel
-and they were interested in the tool, there was also a woman who I forgot the
-name of but she is a serial entrepreneur and she encouraged John to start a
-company, and the Ericsson person agreed to be a first customer, and so Quviq
-was founded in 2006
+and they were interested in QuickCheck. There was also a serial entrepreneur on
+the panel and she encouraged John to start a company, and the Ericsson person
+agreed to be a first customer, and so Quviq was founded in 2006
   + is there a source for this story?
  + https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/ (2002-2006)
  + http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes (2002-2005?)
@@ -105,12 +110,33 @@ was founded in 2006
   - the combination of the above is what i mean by full potential and it can only
     be found in a couple of open source libraries
 
+* [Testing telecoms software with Quviq
+  QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
+  (2006)
+* [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
+
 * [Finding Race Conditions in Erlang with QuickCheck and PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf) (ICFP 2009)
   + [Linearizability: a correctness condition for concurrent objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
   + Jepsen's knossos checker
     + also does fault injection
 
+* Testing A Database for Race Conditions with Quickcheck (2011)
+
+* Testing AUTOSAR software with QuickCheck (2015)
+
+* Testing the hard stuff and staying sane (2014)
+
+* Mysteries of Dropbox: Property-Based Testing of a Distributed Synchronization Service (2016)
+
 ## A survey of property-based testing libraries
+
+As we've seen above, the current state-of-the-art when it comes to
+property-based testing is *stateful* testing via a state machine model and
+reusing the same sequential state machine model combined with linearisability to
+achieve *parallel* testing.
+
+Next let's survey the most commonly used property-based testing libraries to see
+how well supported these two testing features are.
 
 Let me be clear up front that I've not used all of these libraries. My
 understanding comes from reading the documentation, issue tracker and sometimes
@@ -118,15 +144,16 @@ source code.
 
 To my best knowledge, as of April 2024, the following table summarises the
 situation. Please open an
-[issue](https://github.com/stevana/stateful-pbt-with-fakes/issues) (or PR) if
-you see a mistake or an important omission.
+[issue](https://github.com/stevana/stateful-pbt-with-fakes/issues), PR, or get
+in [touch](https://stevana.github.io/about.html) if you see a mistake or an
+important omission.
 
 | Library | Language | Stateful | Parallel | Notes |
 | :---    | :---     | :---:    | :---:    | :---  |
 | ScalaCheck | Scala | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has some support for parallel testing, but it's limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`). |
 | Gopter | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
 | Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
-| Hypothesis | Python | <ul><li>- [x] [docs](https://hypothesis.readthedocs.io/en/latest/stateful.html)</li></ul> | <ul><li>- [ ] </li></ul> | |
+| Hypothesis | Python | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | PropEr | Erlang | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | First open source library to support both? |
 | quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
@@ -141,10 +168,22 @@ you see a mistake or an important omission.
 | test.check | Clojure | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
 | RapidCheck | C++ | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
 | QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Open [issue](https://github.com/nick8325/quickcheck/issues/139) since 2016. |
-| Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104) |
+| Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104). |
 | quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
 
 ## Why are property-based testing libraries in a sad state and what can we do about it?
+
+I hope that by now I've managed to convince you that most property-based testing
+libraries do not implement the state-of-the-art when it comes to property-based
+testing.
+
+In particular parallel testing support is almost non-existant.
+
+* state machine testing gets a [bad
+  reputation](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
+  for being hard to learn and heavyweight
+
+
 
 1. Not as useful as testing pure functions?
 2. More difficult/work to model?
@@ -157,6 +196,10 @@ you see a mistake or an important omission.
   + Part of the original implementations spread to other languages can perhaps
     be attributed to the fact that the original implementation is small, around
     300 lines of code?
+
+* John's MGS course and quickcheck-dynamic
+  + https://www.cse.chalmers.se/~rjmh/MGS2019/
+  - still no parallel testing
 
 In this post:
 
@@ -216,6 +259,7 @@ gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
 
 ## Contract tested fakes
 
+* https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
 ## Future work
 
@@ -232,8 +276,6 @@ Having a compact code base makes it cheaper to make experimental changes.
 ## See also
 
 
-* https://www.well-typed.com/blog/2019/01/qsm-in-depth/
-* https://www.cse.chalmers.se/~rjmh/MGS2019/
 * https://github.com/nick8325/quickcheck/issues/139
 
 * [Experiences with QuickCheck: Testing the Hard Stuff and Staying
@@ -242,14 +284,7 @@ Having a compact code base makes it cheaper to make experimental changes.
 
 * [How to specify it! A Guide to Writing Properties of Pure
   Functions](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf) (2020)
-
   + https://www.youtube.com/watch?v=zvRAyq5wj38
-
 
 * [Building on developers' intuitions to create effective property-based
   tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
-
-* [Testing telecoms software with Quviq
-  QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
-  (2006)
-* [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
