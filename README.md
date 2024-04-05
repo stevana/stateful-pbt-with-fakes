@@ -97,7 +97,7 @@ Strategic Research Foundation, part of this process involved pitching in front
 of a panel of people from industry. Some person from Ericsson was on this panel
 and they were interested in QuickCheck. There was also a serial entrepreneur on
 the panel and she encouraged John to start a company, and the Ericsson person
-agreed to be a first customer, and so Quviq AB was founded in 2006[1].
+agreed to be a first customer, and so Quviq AB was founded in 2006[^1].
 
 * Ericsson's system was written in Erlang and was stateful and concurrent, so
   the original formulation of QuickCheck wasn't enough
@@ -131,8 +131,6 @@ Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx
 
 * [Finding Race Conditions in Erlang with QuickCheck and PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf) (ICFP 2009)
   + [Linearizability: a correctness condition for concurrent objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
-  + Jepsen's knossos checker
-    + also does fault injection
 
 After that most papers are experience reports of applying Quviq QuickCheck at
 different companies, e.g. *Testing A Database for Race Conditions with
@@ -244,15 +242,12 @@ Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx
 In the rest of this post:
 
   1. show how one can implement stateful property-based testing in 150 lines of code.
-     This is the first step, I'll show how to add parallel testing in a follow up post
+     This is the first step
 
-  2. put this technique in context of software development at large.
+  2. add parallel testing in ~300 lines of code
 
-* John's MGS course and quickcheck-dynamic
-  + https://www.cse.chalmers.se/~rjmh/MGS2019/
-  - still no parallel testing
-* Condensed version of qsm's parallel testing built upon the above
-* Edsko's lockstep
+  3. put this technique in context of software development at large.
+
 
 ### QuickCheck recap (stateless property-based testing)
 
@@ -299,23 +294,32 @@ helpful analogy for now, we'll come back to this later).
 
 ### Stateful property-based testing in ~150 LOC
 
+* John's MGS course and quickcheck-dynamic
+  + https://www.cse.chalmers.se/~rjmh/MGS2019/
+  - still no parallel testing
+* Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
 ### Parallel property-based testing in ~300 LOC
 
+* Condensed version of qsm's parallel testing built upon the above
+
 ### Contract tested fakes
 
-* https://www.well-typed.com/blog/2019/01/qsm-in-depth/
+* Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
 ## Future work
 
 Having a compact code base makes it cheaper to make experimental changes.
 
-* Fault injection
-* Simulation testing
-  - Always and sometimes combinators?
 * Can we use
   [`MonadAsync`](https://hackage.haskell.org/package/io-classes-1.4.1.0/docs/Control-Monad-Class-MonadAsync.html)
   and [IOSim](https://hackage.haskell.org/package/io-sim) to make parallel testing deterministic?
+
+* Distributed systems
+  - Fault injection
+    + Jepsen's knossos checker
+  - Simulation testing
+    + Always and sometimes combinators?
 
 
 ## See also
@@ -335,8 +339,9 @@ Having a compact code base makes it cheaper to make experimental changes.
   tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
 
 
-[1]: Is there a source for this story? I can't remember where I've heard
-    it. This short [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
+[^1]: Is there a source for this story? I can't remember where I've heard it.
+    This short
+    [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
     gives some of the details:
 
   > From 2002-2005 he led a major research project in software verification,
