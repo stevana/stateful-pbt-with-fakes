@@ -28,9 +28,11 @@ research groups, two of which are particularly relevant to our story -- the
 what the former group's main interest is. The latter group's mostly conserned
 with a branch of functional programming where the type system is sufficiently
 expressive that it allows for formal specifications of programs, sometimes
-called dependently typed programming or type theory. Given the overlap of
-interest and proximity, researchers at the department are sometimes part of both
-groups or at least visit each others research seminars from time to time.
+called dependently typed programming or type theory. Agda is an example of a
+Haskell-like dependently typed programming language, that also happens to be
+mainly developed by the Programing Logic group. Given the overlap of interest
+and proximity, researchers at the department are sometimes part of both groups
+or at least visit each others research seminars from time to time.
 
 John Hughes is a long-time member of the Functional Programming group, who's
 also well aware of the research on dependently typed programming going on in the
@@ -78,9 +80,9 @@ the complete source code for the [first
 version](https://github.com/Rewbert/quickcheck-v1) of the library is included in
 the appendix of the paper and it's about 300 lines of code.
 
-Haskell and dependently typed programming languages are pure functional
-programming languages, meaning that it's possible at the type-level to
-distinguish whether a function has side-effects or not.
+Haskell and dependently typed programming languages, like Agda, are pure
+functional programming languages, meaning that it's possible at the type-level
+to distinguish whether a function has side-effects or not.
 
 Probably as a result of this, the first version of QuickCheck can only test
 pure functions. This shortcoming was rectified in the follow up paper [*Testing
@@ -95,10 +97,7 @@ Strategic Research Foundation, part of this process involved pitching in front
 of a panel of people from industry. Some person from Ericsson was on this panel
 and they were interested in QuickCheck. There was also a serial entrepreneur on
 the panel and she encouraged John to start a company, and the Ericsson person
-agreed to be a first customer, and so Quviq was founded in 2006
-  + is there a source for this story?
- + https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/ (2002-2006)
- + http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes (2002-2005?)
+agreed to be a first customer, and so Quviq AB was founded in 2006[1].
 
 * Ericsson's system was written in Erlang and was stateful and concurrent, so
   the original formulation of QuickCheck wasn't enough
@@ -109,24 +108,44 @@ agreed to be a first customer, and so Quviq was founded in 2006
     sequential state machine model
   - the combination of the above is what i mean by full potential and it can only
     be found in a couple of open source libraries
-
-* [Testing telecoms software with Quviq
+  - [Testing telecoms software with Quviq
   QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
   (2006)
-* [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
+
+> In early 2006 we began to apply QuickCheck to a product then under devel-
+> opment at Ericsson’s site in Älvsjö (Stockholm). But real Erlang systems use
+> side-effects extensively, in addition to pure functions. Testing functions with side-
+> effects using “vanilla QuickCheck” is not easy—any more than specifying such
+> functions using nothing but predicate calculus is easy—and we found we needed
+> to develop another library on top of QuickCheck specifically for this kind of test-
+> ing. That library has gone through four quite different designs: in this section
+> we shall explain our latest design, and how we arrived at it.
+
+> [...] our state machine testing library, which is built entirely on top of the
+> QuickCheck core. In principle, this could have been written by any user—but in
+> practice, if it took me four iterations to get the design right, after seven
+> years experience of QuickCheck, then it is unreasonable to expect new users to
+> develop such toolkits for themselves.
+Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
+  + mentions parallel testing via traces and interleavings, but not the lineariability paper
 
 * [Finding Race Conditions in Erlang with QuickCheck and PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf) (ICFP 2009)
   + [Linearizability: a correctness condition for concurrent objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
   + Jepsen's knossos checker
     + also does fault injection
 
-* Testing A Database for Race Conditions with Quickcheck (2011)
+After that most papers are experience reports of applying Quviq QuickCheck at
+different companies, e.g. *Testing A Database for Race Conditions with
+QuickCheck* (2011), *[Testing the hard stuff and staying
+sane](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)*
+(2014), *Testing AUTOSAR software with QuickCheck* (2015), *Mysteries of
+Dropbox: Property-Based Testing of a Distributed Synchronization Service*
+(2016).
 
-* Testing AUTOSAR software with QuickCheck (2015)
-
-* Testing the hard stuff and staying sane (2014)
-
-* Mysteries of Dropbox: Property-Based Testing of a Distributed Synchronization Service (2016)
+Sometimes various minor extenions to stateful and parallel testings are needed
+in order to test some particular piece of software, e.g. C FFI bindings in the
+case of AUTOSAR or eventual consistency in the case of Dropbox, but by and large
+the stateful and parallel testing features remain the same.
 
 ## A survey of property-based testing libraries
 
@@ -171,25 +190,48 @@ important omission.
 | Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104). |
 | quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
 
-## Why are property-based testing libraries in a sad state and what can we do about it?
+## Analysis
 
 I hope that by now I've managed to convince you that most property-based testing
 libraries do not implement the state-of-the-art when it comes to property-based
 testing.
 
-In particular parallel testing support is almost non-existant.
+Many lack stateful testing via state machines (2007) and most lack parallel testing support (2009).
+
+Often users of the libraries have opened tickets asking for these features,
+often these tickets have stayed open for years without any progress.
 
 * state machine testing gets a [bad
   reputation](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
   for being hard to learn and heavyweight
 
+Why are property-based testing libraries in such a sad state?
 
 
-1. Not as useful as testing pure functions?
+1. Not as useful as testing pure functions? This is what John told me when I
+   asked him why stateful and parallel testing hasn't taken off in Haskell
+
 2. More difficult/work to model?
   + john hughes [says](https://youtu.be/x4BNj7mVTkw?t=898) testing this way
     requires a bit different way of thinking and you can't just give people the
     tool
+
+> Thomas Arts and I have founded a start-up, Quviq AB, to develop and
+> market Quviq QuickCheck. Interestingly, this is the second implementation of
+> QuickCheck for Erlang. The first was presented at the Erlang User Conference
+> in 2003, and made available on the web. Despite enthusiasm at the conference, it
+> was never adopted in industry. We tried to give away the technology, and it didn’t
+> work! So now we are selling it, with considerably more success. Of course, Quviq
+> QuickCheck is no longer the same product that was offered in 2003—it has been
+> improved in many ways, adapted in the light of customers’ experience, extended
+> to be simpler to apply to customers’ problems, and is available together with
+> training courses and consultancy. That is, we are putting a great deal of work
+> into helping customers adopt the technology. It was naive to expect that simply
+> putting source code on the web would suffice to make that happen, and it would
+> also be unreasonable to expect funding agencies to pay for all the work involved.
+> In that light, starting a company is a natural way for a researcher to make an
+> impact on industrial practice—and so far, at least, it seems to be succeeding.
+Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
 
 3. No concise code to port?
 
@@ -197,19 +239,22 @@ In particular parallel testing support is almost non-existant.
     be attributed to the fact that the original implementation is small, around
     300 lines of code?
 
+## Synthesis
+
+In the rest of this post:
+
+  1. show how one can implement stateful property-based testing in 150 lines of code.
+     This is the first step, I'll show how to add parallel testing in a follow up post
+
+  2. put this technique in context of software development at large.
+
 * John's MGS course and quickcheck-dynamic
   + https://www.cse.chalmers.se/~rjmh/MGS2019/
   - still no parallel testing
+* Condensed version of qsm's parallel testing built upon the above
+* Edsko's lockstep
 
-In this post:
-
-  3. show how one can implement stateful property-based testing in 150 lines of code.
-     This is the first step, I'll show how to add parallel testing in a follow up post
-
-  4. put this technique in context of software development at large.
-
-
-## QuickCheck recap (stateless property-based testing)
+### QuickCheck recap (stateless property-based testing)
 
 The original idea is that we can test some pure (or side-effect free) function
 $f : A \to B$ by randomly generating its argument ($A$) and then checking that
@@ -224,40 +269,40 @@ gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
 * Involution, and other common properties
 
 
-   7   │ Before we get into how to apply property-based testing (PBT) to stateful
-   8   │ systems, lets recall what PBT of pure programs looks like. Here are a few
-   9   │ typical examples:
-  10   │
-  11   │ - `forall (xs : List Int). reverse (reverse xs) == xs`
-  12   │ - `forall (i : Input). deserialise (serialise i) == i`
-  13   │ - `forall (xs : List Int). sort (sort xs) == sort xs`
-  14   │ - `forall (i j k : Int). (i + j) + k == i + (j + k)`
-  15   │ - `forall (x : Int, xs : List Int). member x (insert x xs) && not (member x (remove x xs))`
-  16   │
-  17   │ The idea is that we quantify over some inputs (left-hand side of the `.` above)
-  18   │ which the PBT library will instantiate to random values before checking the
-  19   │ property (right-hand side). In effect the PBT library will generate unit tests,
-  20   │ e.g. the list `[1, 2, 3]` can be generated and reversing that list twice will
-  21   │ give back the same list. How many unit tests are generated can be controlled via
-  22   │ a parameter of the PBT library.
-  23   │
-  24   │ Typical properties to check for include: involution (reverse example above),
-  25   │ inverses (serialise example), idempotency (sort example), associativity
-  26   │ (addition example), axioms of abstract datatypes (member example) etc. Readers
-  27   │ familiar with discrete math might also notice the structural similarity of PBT
-  28   │ with proof by induction, in a sense: the more unit tests we generate the closer
-  29   │ we come to approximating proof by induction (not quite true but could be a
-  30   │ helpful analogy for now, we'll come back to this later).
+Before we get into how to apply property-based testing (PBT) to stateful
+systems, lets recall what PBT of pure programs looks like. Here are a few
+typical examples:
+
+- `forall (xs : List Int). reverse (reverse xs) == xs`
+- `forall (i : Input). deserialise (serialise i) == i`
+- `forall (xs : List Int). sort (sort xs) == sort xs`
+- `forall (i j k : Int). (i + j) + k == i + (j + k)`
+- `forall (x : Int, xs : List Int). member x (insert x xs) && not (member x (remove x xs))`
+
+The idea is that we quantify over some inputs (left-hand side of the `.` above)
+which the PBT library will instantiate to random values before checking the
+property (right-hand side). In effect the PBT library will generate unit tests,
+e.g. the list `[1, 2, 3]` can be generated and reversing that list twice will
+give back the same list. How many unit tests are generated can be controlled via
+a parameter of the PBT library.
+
+Typical properties to check for include: involution (reverse example above),
+inverses (serialise example), idempotency (sort example), associativity
+(addition example), axioms of abstract datatypes (member example) etc. Readers
+familiar with discrete math might also notice the structural similarity of PBT
+with proof by induction, in a sense: the more unit tests we generate the closer
+we come to approximating proof by induction (not quite true but could be a
+helpful analogy for now, we'll come back to this later).
 
 
 * Most tutorials on property-based testing only cover testing pure functions
 
-## Stateful property-based testing in ~150 LOC
+### Stateful property-based testing in ~150 LOC
 
 
-## Parallel property-based testing in ~300 LOC
+### Parallel property-based testing in ~300 LOC
 
-## Contract tested fakes
+### Contract tested fakes
 
 * https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
@@ -288,3 +333,16 @@ Having a compact code base makes it cheaper to make experimental changes.
 
 * [Building on developers' intuitions to create effective property-based
   tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
+
+
+[1]: Is there a source for this story? I can't remember where I've heard
+    it. This short [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
+    gives some of the details:
+
+  > From 2002-2005 he led a major research project in software verification,
+  > funded by the Swedish Strategic Research Foundation. This led to the
+  > development of Quviq QuickCheck in Erlang.
+
+  I believe
+  [this](https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/)
+  must be the project mentioned above.
