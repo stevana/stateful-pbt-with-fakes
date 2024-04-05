@@ -344,10 +344,9 @@ Having a compact code base makes it cheaper to make experimental changes.
     [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
     gives some of the details:
 
-  > From 2002-2005 he led a major research project in software verification,
-  > funded by the Swedish Strategic Research Foundation. This led to the
-  > development of Quviq QuickCheck in Erlang.
+    > From 2002-2005 he led a major research project in software verification,
+    > funded by the Swedish Strategic Research Foundation. This led to the
+    > development of Quviq QuickCheck in Erlang.
 
-  I believe
-  [this](https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/)
-  must be the project mentioned above.
+    I believe [this](https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/)
+    must be the project mentioned above.
