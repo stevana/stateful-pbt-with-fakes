@@ -142,9 +142,7 @@ main technique behind it.
 
 I'd like to stress that no Quiviq QuickCheck library code is every shared in any
 of these papers, they only contain the library APIs (which are public) and test
-examples implemented using said APIs. Trying to replicate the results without
-buying a Quviq QuickCheck license, is almost impossible without a lot of reverse
-engineering work.
+examples implemented using said APIs.
 
 After that most papers are experience reports of applying Quviq QuickCheck at
 different companies, e.g. *Testing A Database for Race Conditions with
@@ -208,25 +206,39 @@ I hope that by now I've managed to convince you that most property-based testing
 libraries do not implement the state-of-the-art when it comes to property-based
 testing.
 
-Many lack stateful testing via state machines (2007) and most lack parallel testing support (2009).
+Many lack stateful testing via state machines (2007) and most lack parallel
+testing support (2009).
 
 Often users of the libraries have opened tickets asking for these features,
 often these tickets have stayed open for years without any progress.
-
-* state machine testing gets a [bad
-  reputation](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
-  for being hard to learn and heavyweight
 
 Why are property-based testing libraries in such a sad state?
 
 
 1. Not as useful as testing pure functions? This is what John told me when I
    asked him why stateful and parallel testing hasn't taken off in Haskell
+   (BobKonf 2017)
+   + separate pure from side-effectful code is certainly good practice
+
+   + however as witnessed by Quviq's very first stint into industry, stateful
+     systems are everywhere there: databases, concurrent datastructures, etc
 
 2. More difficult/work to model?
   + john hughes [says](https://youtu.be/x4BNj7mVTkw?t=898) testing this way
     requires a bit different way of thinking and you can't just give people the
-    tool
+    tool.
+
+  + formal specification and proofs are fundamental to CS and have occupied
+    minds since [Alan
+    Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
+    (1949), here we have an execellent opportunity to introduce formal
+    specification to a lot of programmers without the formal proof part...
+
+3. No concise code to port?
+
+  + Part of the original implementations spread to other languages can perhaps
+    be attributed to the fact that the original implementation is small, around
+    300 lines of code?
 
 > Thomas Arts and I have founded a start-up, Quviq AB, to develop and
 > market Quviq QuickCheck. Interestingly, this is the second implementation of
@@ -245,11 +257,16 @@ Why are property-based testing libraries in such a sad state?
 > impact on industrial practice—and so far, at least, it seems to be succeeding.
 Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
 
-3. No concise code to port?
+  + Trying to replicate the results from the Quviq QuickCheck papers (from 2006
+    and onwards) without buying a Quviq QuickCheck license, is almost impossible
+    without a lot of reverse engineering work.
 
-  + Part of the original implementations spread to other languages can perhaps
-    be attributed to the fact that the original implementation is small, around
-    300 lines of code?
+
+
+* state machine testing gets a [bad
+  reputation](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
+  for being hard to learn and heavyweight
+
 
 ## Synthesis
 
