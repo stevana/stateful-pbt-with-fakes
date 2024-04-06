@@ -84,53 +84,67 @@ Haskell and dependently typed programming languages, like Agda, are pure
 functional programming languages, meaning that it's possible at the type-level
 to distinguish whether a function has side-effects or not.
 
+Proofs about functions in Agda, and similar languages, are almost always only
+dealing with pure functions.
+
 Probably as a result of this, the first version of QuickCheck can only test
 pure functions. This shortcoming was rectified in the follow up paper [*Testing
 monadic code with
 QuickCheck*](https://www.cse.chalmers.se/~rjmh/Papers/QuickCheckST.ps) (2002) by
 the same authors.
 
-XXX: example, file i/o, networking, concurrency, atomics / lock free queues?
+It's an important extension as it allows us to reason about functions that use
+mutable state, file I/O and networking. It also lays the foundation for being
+able to test concurrent programs, as we shall see below.
 
-Around the same time John Hughes was applying for a major grant at the Swedish
-Strategic Research Foundation, part of this process involved pitching in front
-of a panel of people from industry. Some person from Ericsson was on this panel
-and they were interested in QuickCheck. There was also a serial entrepreneur on
-the panel and she encouraged John to start a company, and the Ericsson person
-agreed to be a first customer, and so Quviq AB was founded in 2006[^1].
+Around the same time (2002) John Hughes was applying for a major grant at the
+Swedish Strategic Research Foundation, part of this process involved pitching in
+front of a panel of people from industry. Some person from
+[Ericsson](https://en.wikipedia.org/wiki/Ericsson) was on this panel and they
+were interested in QuickCheck. There was also a serial entrepreneur on the panel
+and she encouraged John to start a company, and the Ericsson person agreed to be
+a first customer, and so Quviq AB was founded in 2006[^1].
 
-* Ericsson's system was written in Erlang and was stateful and concurrent, so
-  the original formulation of QuickCheck wasn't enough
+The first project at Ericsson that Quviq helped out testing was written in
+Erlang. Unlike Haskell, Erlang is not a pure functional programming language and
+on top of that there's concurrency everywhere. So even the second, monadic,
+version of QuickCheck didn't turn out to be ergonomic enough for the job.
 
-* closed source Erlang version [`eqc`](http://quviq.com/documentation/eqc/)
-  - sequential stateful property-based testing using a state machine model
-  - parallel testing with race condition detection for free reusing the
-    sequential state machine model
-  - the combination of the above is what i mean by full potential and it can only
-    be found in a couple of open source libraries
-  - [Testing telecoms software with Quviq
-  QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
-  (2006)
+This is what motivated the closed source Quviq QuickCheck version written in
+Erlang, first mentioned in the paper [Testing telecoms software with Quviq
+QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
+(2006).
 
-> In early 2006 we began to apply QuickCheck to a product then under devel-
-> opment at Ericsson’s site in Älvsjö (Stockholm). But real Erlang systems use
-> side-effects extensively, in addition to pure functions. Testing functions with side-
-> effects using “vanilla QuickCheck” is not easy—any more than specifying such
-> functions using nothing but predicate calculus is easy—and we found we needed
-> to develop another library on top of QuickCheck specifically for this kind of test-
-> ing. That library has gone through four quite different designs: in this section
-> we shall explain our latest design, and how we arrived at it.
+The main features of the closed source version that, as we shall see, are still
+not found in many open source versions are:
 
-> [...] our state machine testing library, which is built entirely on top of the
-> QuickCheck core. In principle, this could have been written by any user—but in
-> practice, if it took me four iterations to get the design right, after seven
-> years experience of QuickCheck, then it is unreasonable to expect new users to
-> develop such toolkits for themselves.
-Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
-  + mentions parallel testing via traces and interleavings, but not the lineariability paper
+  1. Sequential *stateful* property-based testing using a state machine model;
+  2. *Parallel* testing with race condition detection for free reusing the
+    sequential state machine model.
 
-* [Finding Race Conditions in Erlang with QuickCheck and PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf) (ICFP 2009)
-  + [Linearizability: a correctness condition for concurrent objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf)
+We shall describe how these features work in detail later.
+
+For now let's just note that *stateful* testing in its current form was first
+mentioned in [QuickCheck testing for fun and
+profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
+(2007). This paper also mentions that it took John four iterations to get the
+stateful testing design right, so while the 2006 paper does mention stateful
+testing it's likely containing an earlier version of it.
+
+While the 2007 paper also mentiones *parallel* testing via traces and
+interleavings, it's vague on details. It's only later in [Finding Race
+Conditions in Erlang with QuickCheck and
+PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+(ICFP 2009) that parallel testing is described in detail including a reference
+to [Linearizability: a correctness condition for concurrent
+objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) which is the
+main technique behind it.
+
+I'd like to stress that no Quiviq QuickCheck library code is every shared in any
+of these papers, they only contain the library APIs (which are public) and test
+examples implemented using said APIs. Trying to replicate the results without
+buying a Quviq QuickCheck license, is almost impossible without a lot of reverse
+engineering work.
 
 After that most papers are experience reports of applying Quviq QuickCheck at
 different companies, e.g. *Testing A Database for Race Conditions with
@@ -289,7 +303,6 @@ with proof by induction, in a sense: the more unit tests we generate the closer
 we come to approximating proof by induction (not quite true but could be a
 helpful analogy for now, we'll come back to this later).
 
-
 * Most tutorials on property-based testing only cover testing pure functions
 
 ### Stateful property-based testing in ~150 LOC
@@ -310,6 +323,9 @@ helpful analogy for now, we'll come back to this later).
 ## Future work
 
 Having a compact code base makes it cheaper to make experimental changes.
+
+* Translate code to other programming language paradigms, thus making it easier
+  for library implementors
 
 * Can we use
   [`MonadAsync`](https://hackage.haskell.org/package/io-classes-1.4.1.0/docs/Control-Monad-Class-MonadAsync.html)
