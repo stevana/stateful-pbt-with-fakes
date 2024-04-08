@@ -1,5 +1,7 @@
 # The sad state of property-based testing libraries
 
+*Work in progress, please don't share, but do get involved!**
+
 Property-based testing is a rare example of academic research that has made it
 to the mainstream in less than 30 years.
 
@@ -265,9 +267,10 @@ says to be true and I believe he acts with the best intentions.
 I do agree that separating pure from side-effectful code is certainly good
 practice in any programming language and that you can get far by merely
 property-based testing those pure fragments. However I also do think that
-stateful and parallel testing is almost equally important for most non-trivial
-software systems. Most systems will have some database, stateful protocol or use
-concurrent datastructures, which all benefit from these features.
+stateful and parallel testing is almost equally important for many non-trivial
+software systems. Most systems in industry will have some database, stateful
+protocol or use concurrent datastructures, which all benefit from these
+features.
 
 Regarding formal specification requiring a special way of thinking and therefor
 training, I believe this is a correct assesment, but I also beleive that this is
@@ -284,14 +287,14 @@ testing of pure functions more accessible to programmers:
 
 * [How to specify it! A Guide to Writing Properties of Pure
   Functions](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf) (2020)
-  + https://www.youtube.com/watch?v=zvRAyq5wj38
 
 * [Building on developers' intuitions to create effective property-based
-  tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
+  tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ) (2019)
 
 * experience reports already mentioned above
 
-* can we do the same for stateful and parallel testing?
+* can we do the same for stateful and parallel testing? not necessarily harder
+  than pure functions.
 
 * Regarding keeping the source closed helping with adoption
   + perhaps the most controversial point
@@ -375,13 +378,17 @@ helpful analogy for now).
   - still no parallel testing
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
+* Queue example
+
 ### Parallel property-based testing in ~300 LOC
 
 * Condensed version of qsm's parallel testing built upon the above
+* Ticket dispenser example
 
 ### Contract tested fakes
 
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
+* Queue example again?
 
 ## Future work
 
