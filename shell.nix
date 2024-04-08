@@ -10,6 +10,7 @@ pkgs.mkShell {
     haskellPackages.cabal-fmt
     stylish-haskell
     zlib.dev
+    proselint
   ];
 }
 

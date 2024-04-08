@@ -54,8 +54,9 @@ Formally proving that a program is correct with respect to a specification is
 often as much work as writing the program in the first place, so merely testing
 it can often be a sweet spot where you get some confidence that the
 specification is correct, without having to do the proving work. For example in
-the sorting example you can simply compare the output of your sorting function
-with the one in the standard library (which is very likely to be correct).
+the sorting example you can simply generate a random input list and then compare
+the output of your sorting function with the one in the standard library (which
+is likely to be correct).
 
 As programs get more complicted the ratio of effort saved by merely testing, as
 opposed to proving, increases. In fact for bigger programs the effort involved
@@ -97,13 +98,15 @@ It's an important extension as it allows us to reason about functions that use
 mutable state, file I/O and networking. It also lays the foundation for being
 able to test concurrent programs, as we shall see below.
 
-Around the same time (2002) John Hughes was applying for a major grant at the
-Swedish Strategic Research Foundation, part of this process involved pitching in
-front of a panel of people from industry. Some person from
-[Ericsson](https://en.wikipedia.org/wiki/Ericsson) was on this panel and they
-were interested in QuickCheck. There was also a serial entrepreneur on the panel
-and she encouraged John to start a company, and the Ericsson person agreed to be
-a first customer, and so Quviq AB was founded in 2006[^1].
+Around the same time as the second paper was published (2002), John was applying
+for a major grant at the Swedish Strategic Research Foundation. A part of the
+application process involved pitching in front of a panel of people from
+industry. Some person from [Ericsson](https://en.wikipedia.org/wiki/Ericsson)
+was on this panel and they were interested in QuickCheck. There was also a
+serial entrepreneur on the panel and she encouraged John to start a company, and
+the Ericsson person agreed to be a first customer, and so Quviq AB was founded
+in 2006[^1] by John and Thomas Arts (perhaps somewhat surprisingly, Koen was
+never involved in the company).
 
 The first project at Ericsson that Quviq helped out testing was written in
 Erlang. Unlike Haskell, Erlang is not a pure functional programming language and
@@ -119,8 +122,8 @@ The main features of the closed source version that, as we shall see, are still
 not found in many open source versions are:
 
   1. Sequential *stateful* property-based testing using a state machine model;
-  2. *Parallel* testing with race condition detection for free reusing the
-    sequential state machine model.
+  2. *Parallel* testing with race condition detection by reusing the sequential
+    state machine model.
 
 We shall describe how these features work in detail later.
 
@@ -128,8 +131,8 @@ For now let's just note that *stateful* testing in its current form was first
 mentioned in [QuickCheck testing for fun and
 profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
 (2007). This paper also mentions that it took John four iterations to get the
-stateful testing design right, so while the 2006 paper does mention stateful
-testing it's likely containing an earlier version of it.
+stateful testing design right, so while the 2006 paper already does mention
+stateful testing it's likely containing one of those earlier iteration of it.
 
 While the 2007 paper also mentiones *parallel* testing via traces and
 interleavings, it's vague on details. It's only later in [Finding Race
@@ -187,22 +190,22 @@ important omission.
 | quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
-| jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) from 2015. |
+| jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015. |
 | fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking of stateful programs, it's not clear to me how it relates to Quviq's Erlang QuickcCheck's parallel testing though. |
-| SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) from 2016. |
-| propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) from 2020. |
+| SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016. |
+| propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020. |
 | jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
 | QuickTheories | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less." |
 | FsCheck | F# | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016. |
 | test.check | Clojure | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
 | RapidCheck | C++ | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
-| QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Open [issue](https://github.com/nick8325/quickcheck/issues/139) since 2016. |
+| QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/nick8325/quickcheck/issues/139) to add stateful testing since 2016. |
 | Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104). |
 | quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
 
 ## Analysis
 
-I hope that by now I've managed to convince you that most property-based testing
+By now I hope that I've managed to convince you that most property-based testing
 libraries do not implement the state-of-the-art when it comes to property-based
 testing.
 
@@ -212,56 +215,98 @@ testing support (2009).
 Often users of the libraries have opened tickets asking for these features,
 often these tickets have stayed open for years without any progress.
 
-Why are property-based testing libraries in such a sad state?
+Furthermore it's not clear to me whether all libraries that support stateful
+testing can be generalised to parallel testing without a substantial redesign of
+their APIs. I don't think there's a single example of a library to which
+parallel testing was added later, rather than designed for from the start.
 
+__Why are property-based testing libraries in such a sad state?__
 
-1. Not as useful as testing pure functions? This is what John told me when I
-   asked him why stateful and parallel testing hasn't taken off in Haskell
-   (BobKonf 2017)
-   + separate pure from side-effectful code is certainly good practice
+Here are three reasons I've heard from John:
 
-   + however as witnessed by Quviq's very first stint into industry, stateful
-     systems are everywhere there: databases, concurrent datastructures, etc
+1. The stateful and parallel testing featurs are not as useful as testing pure
+   functions. This is what John told me when I asked him why these features
+   haven't taken off in Haskell (BobKonf 2017);
 
-2. More difficult/work to model?
-  + john hughes [says](https://youtu.be/x4BNj7mVTkw?t=898) testing this way
-    requires a bit different way of thinking and you can't just give people the
-    tool.
+2. The state machine models that one needs to write for the stateful and
+   parallel testing require a different way of thinking compared to normal
+   testing. One can't merely give these tools to new users without also giving
+   them proper training, John said in an
+   [interview](https://youtu.be/x4BNj7mVTkw?t=898);
 
-  + formal specification and proofs are fundamental to CS and have occupied
-    minds since [Alan
-    Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
-    (1949), here we have an execellent opportunity to introduce formal
-    specification to a lot of programmers without the formal proof part...
+3. A closed source product and associated services
+   [helps](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
+   adoption:
 
-3. No concise code to port?
+   > Thomas Arts and I have founded a start-up, Quviq AB, to develop and market
+   > Quviq QuickCheck. Interestingly, this is the second implementation of
+   > QuickCheck for Erlang. The first was presented at the Erlang User
+   > Conference in 2003, and made available on the web. Despite enthusiasm at
+   > the conference, it was never adopted in industry. We tried to give away the
+   > technology, and it didn’t work! So now we are selling it, with considerably
+   > more success. Of course, Quviq QuickCheck is no longer the same product
+   > that was offered in 2003—it has been improved in many ways, adapted in the
+   > light of customers’ experience, extended to be simpler to apply to
+   > customers’ problems, and is available together with training courses and
+   > consultancy. That is, we are putting a great deal of work into helping
+   > customers adopt the technology. It was naive to expect that simply putting
+   > source code on the web would suffice to make that happen, and it would also
+   > be unreasonable to expect funding agencies to pay for all the work
+   > involved. In that light, starting a company is a natural way for a
+   > researcher to make an impact on industrial practice—and so far, at least,
+   > it seems to be succeeding.
+
+A cynic might argue that there's a conflict of interest between doing research
+and education on one hand and running a company on the other.
+
+Let me be clear that I've the utmost respect for John, and I believe what he
+says to be true and I believe he acts with the best intentions.
+
+I do agree that separating pure from side-effectful code is certainly good
+practice in any programming language and that you can get far by merely
+property-based testing those pure fragments. However I also do think that
+stateful and parallel testing is almost equally important for most non-trivial
+software systems. Most systems will have some database, stateful protocol or use
+concurrent datastructures, which all benefit from these features.
+
+Regarding formal specification requiring a special way of thinking and therefor
+training, I believe this is a correct assesment, but I also beleive that this is
+already true for property-based testing of pure functions.
+
+Formal specification and proofs are fundamental to computer science and have
+occupied minds since [Alan
+Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
+(1949). Property-based testing gives us an execellent opportunity to introduce
+formal specification to a lot of programmers without the formal proof part.
+
+John has written papers and given talks on the topic of making property-based
+testing of pure functions more accessible to programmers:
+
+* [How to specify it! A Guide to Writing Properties of Pure
+  Functions](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf) (2020)
+  + https://www.youtube.com/watch?v=zvRAyq5wj38
+
+* [Building on developers' intuitions to create effective property-based
+  tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
+
+* experience reports already mentioned above
+
+* can we do the same for stateful and parallel testing?
+
+* Regarding keeping the source closed helping with adoption
+  + perhaps the most controversial point
+
+  + but if you see it from john's perspective, how else would an academic get
+    funding to work on tooling (which typically isn't reconginised as doing
+    research) feedback from industry, able to hire people
+  + open source is broken, from a financial perspective (unless you are a big company)
 
   + Part of the original implementations spread to other languages can perhaps
     be attributed to the fact that the original implementation is small, around
     300 lines of code?
-
-> Thomas Arts and I have founded a start-up, Quviq AB, to develop and
-> market Quviq QuickCheck. Interestingly, this is the second implementation of
-> QuickCheck for Erlang. The first was presented at the Erlang User Conference
-> in 2003, and made available on the web. Despite enthusiasm at the conference, it
-> was never adopted in industry. We tried to give away the technology, and it didn’t
-> work! So now we are selling it, with considerably more success. Of course, Quviq
-> QuickCheck is no longer the same product that was offered in 2003—it has been
-> improved in many ways, adapted in the light of customers’ experience, extended
-> to be simpler to apply to customers’ problems, and is available together with
-> training courses and consultancy. That is, we are putting a great deal of work
-> into helping customers adopt the technology. It was naive to expect that simply
-> putting source code on the web would suffice to make that happen, and it would
-> also be unreasonable to expect funding agencies to pay for all the work involved.
-> In that light, starting a company is a natural way for a researcher to make an
-> impact on industrial practice—and so far, at least, it seems to be succeeding.
-Source: John Hughes in [QuickCheck testing for fun and profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c) (2007)
-
   + Trying to replicate the results from the Quviq QuickCheck papers (from 2006
     and onwards) without buying a Quviq QuickCheck license, is almost impossible
     without a lot of reverse engineering work.
-
-
 
 * state machine testing gets a [bad
   reputation](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
@@ -277,7 +322,8 @@ In the rest of this post:
 
   2. add parallel testing in ~300 lines of code
 
-  3. put this technique in context of software development at large.
+  3. make specifications simpler using fakes, and put this technique in context
+     of software development at large.
 
 
 ### QuickCheck recap (stateless property-based testing)
@@ -318,7 +364,7 @@ inverses (serialise example), idempotency (sort example), associativity
 familiar with discrete math might also notice the structural similarity of PBT
 with proof by induction, in a sense: the more unit tests we generate the closer
 we come to approximating proof by induction (not quite true but could be a
-helpful analogy for now, we'll come back to this later).
+helpful analogy for now).
 
 * Most tutorials on property-based testing only cover testing pure functions
 
@@ -353,23 +399,6 @@ Having a compact code base makes it cheaper to make experimental changes.
     + Jepsen's knossos checker
   - Simulation testing
     + Always and sometimes combinators?
-
-
-## See also
-
-
-* https://github.com/nick8325/quickcheck/issues/139
-
-* [Experiences with QuickCheck: Testing the Hard Stuff and Staying
-  Sane](https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quviq-testing.pdf)
-  - https://www.youtube.com/watch?v=zi0rHwfiX1Q
-
-* [How to specify it! A Guide to Writing Properties of Pure
-  Functions](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf) (2020)
-  + https://www.youtube.com/watch?v=zvRAyq5wj38
-
-* [Building on developers' intuitions to create effective property-based
-  tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ)
 
 
 [^1]: Is there a source for this story? I can't remember where I've heard it.
