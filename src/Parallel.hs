@@ -72,16 +72,19 @@ pruneParallel = go initialState
       | parSafe s cmds = cmds : go (advanceState s cmds) cmdss
       | otherwise      =        go s cmdss
 
-parSafe :: StateModel state => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
+parSafe :: StateModel state
+        => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
 parSafe s = all (validCommands s) . permutations
 
-validCommands :: StateModel state => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
+validCommands :: StateModel state
+              => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
 validCommands _s []           = True
 validCommands s  (cmd : cmds)
   | precondition s cmd = validCommands (nextState s cmd) cmds
   | otherwise          = False
 
-advanceState :: StateModel state => state -> [Untyped (Command state (Var (Reference state)))] -> state
+advanceState :: StateModel state
+             => state -> [Untyped (Command state (Var (Reference state)))] -> state
 advanceState s cmds = foldl' (\ih cmd -> nextState ih cmd) s cmds
 
 ------------------------------------------------------------------------
