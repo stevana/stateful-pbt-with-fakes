@@ -1,14 +1,15 @@
 {-# LANGUAGE ConstrainedClassMethods #-}
-{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -23,49 +24,15 @@ import Test.QuickCheck.Monadic
 
 ------------------------------------------------------------------------
 
-type Untyped:: (Type -> Type) -> Type
-data Untyped f where
-  Untyped :: (Typeable a, Eq a, Show a) => f a -> Untyped f
-deriving instance (forall a. Show (f a)) => Show (Untyped f)
-
-data Flip f a b = Flip { unFlip :: f b a }
-
-type Symbolic state resp = Command state (Var (Reference state)) resp
-type Concrete state resp = Command state (Reference state) resp
-
--- type Symbolic_ state = Untyped (Symbolic state)
-
-type Env state = Var (Reference state) -> Reference state
-
-subst :: Functor (Flip (Command state) resp) => Env state -> Symbolic state resp -> Concrete state resp
-subst env cmd = unFlip (fmap env (Flip cmd))
-
-data Var a = Var Int
-  deriving (Show, Eq, Ord)
-
-data Return state resp
-  = Reference (Reference state)
-  | Response resp
-deriving instance (Show (Reference state), Show resp) => Show (Return state resp)
-
-------------------------------------------------------------------------
-
 class StateModel state where
-  data Command state :: Type -> Type -> Type
+  data Command state :: forall k. k -> Type -> Type
   type Reference state :: Type
   type Failure state :: Type
 
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
 
-  runCommandMonad :: state -> CommandMonad state a -> IO a
-
   generateCommand :: state -> Gen (Untyped (Command state (Var (Reference state))))
-
-  commandName :: (forall ref. Show ref => Show (Command state ref resp),
-                  Show resp)
-              => Command state (Var (Reference state)) resp -> String
-  commandName = head . words . show
 
   shrinkCommand :: state -> Untyped (Command state (Var (Reference state)))
                 -> [Untyped (Command state (Var (Reference state)))]
@@ -79,14 +46,35 @@ class StateModel state where
   runReal :: Env state -> Command state (Var (Reference state)) resp
           -> CommandMonad state (Return state resp)
 
-  runReal2 :: Command state (Reference state) resp
-          -> CommandMonad state (Return state resp)
-
   abstractFailure :: state -> SomeException -> Maybe (Failure state)
 
   monitoring :: (state, state) -> Command state (Var (Reference state)) resp
              -> Either (Reference state) resp -> Property -> Property
   monitoring _states _cmd _resp = id
+
+  commandName :: (forall ref. Show ref => Show (Command state ref resp),
+                  Show resp)
+              => Command state (Var (Reference state)) resp -> String
+  commandName = head . words . show
+
+  runCommandMonad :: state -> CommandMonad state a -> IO a
+
+------------------------------------------------------------------------
+
+type Untyped :: (Type -> Type) -> Type
+data Untyped f where
+  Untyped :: (Typeable a, Eq a, Show a) => f a -> Untyped f
+deriving instance (forall a. Show (f a)) => Show (Untyped f)
+
+type Env state = Var (Reference state) -> Reference state
+
+data Var a = Var Int
+  deriving (Show, Eq, Ord)
+
+data Return state resp
+  = Reference (Reference state)
+  | Response resp
+deriving instance (Show (Reference state), Show resp) => Show (Return state resp)
 
 ------------------------------------------------------------------------
 

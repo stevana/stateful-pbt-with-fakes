@@ -1,6 +1,6 @@
 # The sad state of property-based testing libraries
 
-*Work in progress, please don't share, but do get involved!**
+*Work in progress, please don't share, but do get involved!*
 
 Property-based testing is a rare example of academic research that has made it
 to the mainstream in less than 30 years.
@@ -379,6 +379,8 @@ helpful analogy for now).
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
 * Queue example
+  + negative tests
+  + proper coverage
 
 ### Parallel property-based testing in ~300 LOC
 

@@ -95,6 +95,7 @@ instance StateModel State where
 
   abstractFailure _state ex = fromIOError =<< fromException ex
 
+  -- XXX: this isn't right
   monitoring (_state, State state') (Open _f) (Right _h)
     | Map.size (open state') >= 2 = tabulate "Tags" [show OpenTwo]
     | otherwise                   = id

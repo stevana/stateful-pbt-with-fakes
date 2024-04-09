@@ -27,6 +27,8 @@ library
     FileSystem.Interface
     FileSystem.Test
     Parallel
+    Queue.Fake
+    Queue.Real
     Queue.Test
     StateModel
     TicketDispenser

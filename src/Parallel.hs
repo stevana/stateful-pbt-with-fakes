@@ -50,7 +50,7 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
             ]
 
 
-  shrink s = []
+  shrink _s = []
   {-
     = filter (validParallelCommands s)
     . map ParallelCommands
