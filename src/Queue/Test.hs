@@ -134,16 +134,16 @@ arbitraryVar s = do
 
 instance StateModel State where
 
-  data Command State q a where
-    New  :: Int -> Command State q q
-    Put  :: Int -> q -> Command State q ()
-    Get  :: q -> Command State q Int
-    Size :: q -> Command State q Int
+  data Command State a where
+    New  :: Int -> Command State (Var (Queue Int))
+    Put  :: Int -> Var (Queue Int) -> Command State ()
+    Get  :: Var (Queue Int) -> Command State Int
+    Size :: Var (Queue Int) -> Command State Int
 
   type Reference State = Queue Int
   type Failure State = Err
 
-  generateCommand :: State -> Gen (Untyped (Command State (Var (Queue Int))))
+  generateCommand :: State -> Gen (Untyped (Command State))
   generateCommand s
     | Map.null s = Untyped <$> (New <$> arbitrary)
     | otherwise  =
@@ -153,7 +153,7 @@ instance StateModel State where
           , (1, Untyped <$> (New <$> arbitrary))
           ]
 
-  shrinkCommand :: State -> Untyped (Command State q) -> [Untyped (Command State q)]
+  shrinkCommand :: State -> Untyped (Command State) -> [Untyped (Command State)]
   shrinkCommand _s (Untyped (New n))   = map (Untyped . New) (shrink n)
   shrinkCommand _s (Untyped (Put x q)) = map (Untyped . flip Put q) (shrink x)
   shrinkCommand _s _         = []
@@ -161,14 +161,14 @@ instance StateModel State where
   initialState :: State
   initialState = emptyState
 
-  runFake :: Command State (Var (Reference State)) resp -> State
+  runFake :: Command State resp -> State
           -> Either (Failure State) (State, resp)
   runFake (New n)   = fNew n
   runFake (Put x q) = fPut x q
   runFake (Get q)   = fGet q
   runFake (Size q)  = fSize q
 
-  runReal :: Env State -> Command State (Var (Reference State)) resp
+  runReal :: Env State -> Command State resp
           -> CommandMonad State (Return State resp)
   runReal _env (New n)   = Reference <$> new n
   runReal env  (Put x q) = Response  <$> put x (env q)
@@ -180,7 +180,7 @@ instance StateModel State where
 
   runCommandMonad _ = id
 
-deriving instance Show q => Show (Command State q a)
+deriving instance Show (Command State a)
 
 prop_ok :: Commands State -> Property
 prop_ok cmds = monadicIO $ do

@@ -24,29 +24,31 @@ instance Show (Opaque a) where
 
 data State = NoState | State Int
 
+type Ref = Var (Opaque (IORef Int))
+
 instance StateModel State where
 
   initialState = NoState
 
-  data Command State ref resp where
-    New        :: Command State ref ref
-    TakeTicket :: ref -> Command State ref Int
-    Reset      :: ref -> Command State ref ()
+  data Command State resp where
+    New        :: Command State (Var (Reference State))
+    TakeTicket :: Var (Reference State) -> Command State Int
+    Reset      :: Var (Reference State) -> Command State ()
 
-  generateCommand :: State -> Gen (Untyped (Command State (Var (Reference State))))
+  type Reference State = Opaque (IORef Int)
+  type Failure State = ()
+
+  generateCommand :: State -> Gen (Untyped (Command State))
   generateCommand NoState   = return (Untyped New)
   generateCommand (State _) = frequency
     [ (1, Untyped <$> return (Reset (Var 0)))
     , (9, Untyped <$> return (TakeTicket (Var 0)))
     ]
 
-  type Reference State = Opaque (IORef Int)
-
-  type Failure State = ()
 
   runCommandMonad _ = id
 
-  runFake :: Command State (Var (Reference State)) resp -> State -> Either () (State, resp)
+  runFake :: Command State resp -> State -> Either () (State, resp)
   runFake New               NoState    = return (State 0, Var 0)
   runFake New               (State _)  = Left ()
   runFake (TakeTicket _ref) (State n)  = return (State (n + 1), n)
@@ -54,7 +56,7 @@ instance StateModel State where
   runFake (Reset _ref)      (State _n) = return (State 0, ())
   runFake (Reset _ref)      NoState    = Left ()
 
-  runReal :: Env State -> Command State (Var (Reference State)) resp -> IO (Return State resp)
+  runReal :: Env State -> Command State resp -> IO (Return State resp)
   runReal _env New = Reference . Opaque <$> newIORef 0
   runReal env (TakeTicket ref) = do
     n <- readIORef (unOpaque (env ref))
@@ -64,7 +66,7 @@ instance StateModel State where
     return (Response n)
   runReal env (Reset ref) = Response <$> writeIORef (unOpaque (env ref)) 0
 
-deriving instance Show ref => Show (Command State ref resp)
+deriving instance Show (Command State resp)
 
 prop_seq :: Commands State -> Property
 prop_seq cmds = monadicIO $ do

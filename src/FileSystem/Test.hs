@@ -26,12 +26,12 @@ newtype State = State { unState :: Mock }
 
 instance StateModel State where
 
-  data Command State h a where
-    MkDir :: Dir -> Command State h ()
-    Open  :: File -> Command State h h
-    Write :: h -> String -> Command State h ()
-    Close :: h -> Command State h ()
-    Read  :: File -> Command State h String
+  data Command State a where
+    MkDir :: Dir -> Command State ()
+    Open  :: File -> Command State (Var Handle)
+    Write :: Var Handle -> String -> Command State ()
+    Close :: Var Handle -> Command State ()
+    Read  :: File -> Command State String
 
   type Reference State = Handle
 
@@ -39,13 +39,13 @@ instance StateModel State where
 
   type CommandMonad State = IO
 
-  generateCommand :: State -> Gen (Untyped (Command State MHandle))
+  generateCommand :: State -> Gen (Untyped (Command State))
   generateCommand (State s) = oneof $ concat
     [ withoutHandle
     , if null (Map.keys (open s)) then [] else withHandle
     ]
     where
-      withoutHandle :: [Gen (Untyped (Command State MHandle))]
+      withoutHandle :: [Gen (Untyped (Command State))]
       withoutHandle =
         [ Untyped <$> (MkDir <$> genDir)
         , Untyped <$> (Open <$> genFile)
@@ -54,7 +54,7 @@ instance StateModel State where
                                 else genWrittenFile s)
         ]
 
-      withHandle :: [Gen (Untyped (Command State MHandle))]
+      withHandle :: [Gen (Untyped (Command State))]
       withHandle =
         [ Untyped <$> (Write <$> genHandle s <*> genString)
         , Untyped <$> (Close <$> genHandle s)
@@ -86,7 +86,7 @@ instance StateModel State where
   runFake (Close h)   = assoc . mClose h . unState
   runFake (Read f)    = assoc . mRead f . unState
 
-  runReal :: Env State -> Command State (Var (Reference State)) a -> IO (Return State a)
+  runReal :: Env State -> Command State a -> IO (Return State a)
   runReal _env (MkDir d)  = Response <$> iMkDir (real root) d
   runReal _env (Open f)   = Reference  <$> iOpen (real root) f
   runReal env (Write h s) = Response <$> iWrite (real root) (env h) s
@@ -104,7 +104,7 @@ instance StateModel State where
     | otherwise = id
   monitoring _states _cmd _resp = id
 
-deriving instance Show h => Show (Command State h a)
+deriving instance Show (Command State a)
 
 ------------------------------------------------------------------------
 

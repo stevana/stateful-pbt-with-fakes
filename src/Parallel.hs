@@ -27,18 +27,17 @@ import StateModel hiding (Event, History)
 ------------------------------------------------------------------------
 
 newtype ParallelCommands state = ParallelCommands
-  { unParallelCommands :: [[Untyped (Command state (Var (Reference state)))]]
+  { unParallelCommands :: [[Untyped (Command state)]]
   }
 deriving stock instance
-  (forall ref resp. Show ref => Show (Command state ref resp))
-  => Show (ParallelCommands state)
+  (forall resp. Show (Command state resp)) => Show (ParallelCommands state)
 
 instance StateModel state => Arbitrary (ParallelCommands state) where
 
   arbitrary :: Gen (ParallelCommands state)
   arbitrary = ParallelCommands <$> go initialState
     where
-      go :: state -> Gen [[Untyped (Command state (Var (Reference state)))]]
+      go :: state -> Gen [[Untyped (Command state)]]
       go s = sized $ \n ->
         let
           w = n `div` 2 + 1
@@ -58,13 +57,13 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
     = map (ParallelCommands . pruneParallel . map (map fst))
           (shrinkList (shrinkList shrinker) (map withStates cmdss))
     where
-      shrinker :: (Untyped (Command state (Var (Reference state))), state)
-               -> [(Untyped (Command state (Var (Reference state))), state)]
+      shrinker :: (Untyped (Command state), state)
+               -> [(Untyped (Command state), state)]
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
 pruneParallel :: StateModel state
-              => [[Untyped (Command state (Var (Reference state)))]]
-              -> [[Untyped (Command state (Var (Reference state)))]]
+              => [[Untyped (Command state)]]
+              -> [[Untyped (Command state)]]
 pruneParallel = go initialState
   where
     go _s [] = []
@@ -73,33 +72,30 @@ pruneParallel = go initialState
       | otherwise      =        go s cmdss
 
 parSafe :: StateModel state
-        => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
+        => state -> [Untyped (Command state)] -> Bool
 parSafe s = all (validCommands s) . permutations
 
 validCommands :: StateModel state
-              => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
+              => state -> [Untyped (Command state)] -> Bool
 validCommands _s []           = True
 validCommands s  (cmd : cmds)
   | precondition s cmd = validCommands (nextState s cmd) cmds
   | otherwise          = False
 
-advanceState :: StateModel state
-             => state -> [Untyped (Command state (Var (Reference state)))] -> state
+advanceState :: StateModel state => state -> [Untyped (Command state)] -> state
 advanceState s cmds = foldl' (\ih cmd -> nextState ih cmd) s cmds
 
 ------------------------------------------------------------------------
 
 newtype History state = History [Event state]
 deriving stock instance
-  (forall ref resp. Show ref => Show (Command state ref resp))
-  => Show (History state)
+  (forall resp. Show (Command state resp)) => Show (History state)
 
 data Event state
-  = Invoke Pid (Untyped (Command state (Var (Reference state))))
+  = Invoke Pid (Untyped (Command state))
   | Ok     Pid Dynamic
 deriving stock instance
-  (forall ref resp. Show ref => Show (Command state ref resp))
-  => Show (Event state)
+  (forall resp. Show (Command state resp)) => Show (Event state)
 
 newtype Pid = Pid Int
   deriving stock (Eq, Ord, Show)
@@ -108,7 +104,7 @@ toPid :: ThreadId -> Pid
 toPid tid = Pid (read (drop (length ("ThreadId " :: String)) (show tid)))
 
 data Op state = forall resp. Eq resp =>
-  Op (Command state (Var (Reference state)) resp)
+  Op (Command state resp)
      (Return state resp)
 
 interleavings :: Typeable state => History state -> Forest (Op state)
@@ -122,7 +118,7 @@ interleavings (History evs0) =
   where
     fromDyn_ resp = fromDyn resp (error "interleavings: impossible")
 
-    takeInvocations :: [Event state] -> [(Pid, Untyped (Command state (Var (Reference state))))]
+    takeInvocations :: [Event state] -> [(Pid, Untyped (Command state))]
     takeInvocations []                         = []
     takeInvocations ((Invoke pid cmd)   : evs) = (pid, cmd) : takeInvocations evs
     takeInvocations ((Ok    _pid _resp) : _)   = []
@@ -143,9 +139,9 @@ interleavings (History evs0) =
                        | otherwise = xs
 
 runParallelReal :: forall state resp. (StateModel state, MonadIO (CommandMonad state),
-                    Typeable state, Typeable resp, Eq resp, Show resp)
+                   Typeable state, Typeable resp, Eq resp, Show resp)
                 => TQueue (Event state) -> Env state
-                -> Command state (Var (Reference state)) resp
+                -> Command state  resp
                 -> IO (Maybe (Reference state))
 runParallelReal evs env cmd = do
   pid <- toPid <$> liftIO myThreadId
@@ -177,8 +173,7 @@ linearisable = any' (go initialState)
 runParallelCommands :: forall state.
   (StateModel state, MonadIO (CommandMonad state),
   MonadCatch (CommandMonad state), Typeable state, Typeable (Reference state),
-  (forall ref resp. Show ref => Show (Command state ref resp)),
-  Show (Reference state))
+  (forall resp. Show (Command state resp)), Show (Reference state))
   => ParallelCommands state -> PropertyM (CommandMonad state) ()
 runParallelCommands (ParallelCommands cmdss0) = do
   -- replicateM_ 10 $ do

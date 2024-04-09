@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -25,36 +24,32 @@ import Test.QuickCheck.Monadic
 ------------------------------------------------------------------------
 
 class StateModel state where
-  data Command state :: forall k. k -> Type -> Type
+  data Command   state :: Type -> Type
   type Reference state :: Type
-  type Failure state :: Type
+  type Failure   state :: Type
 
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
 
-  generateCommand :: state -> Gen (Untyped (Command state (Var (Reference state))))
+  generateCommand :: state -> Gen (Untyped (Command state))
 
-  shrinkCommand :: state -> Untyped (Command state (Var (Reference state)))
-                -> [Untyped (Command state (Var (Reference state)))]
+  shrinkCommand :: state -> Untyped (Command state) -> [Untyped (Command state)]
   shrinkCommand _state _cmd = []
 
   initialState :: state
 
-  runFake :: Command state (Var (Reference state)) resp -> state
-          -> Either (Failure state) (state, resp)
+  runFake :: Command state resp -> state -> Either (Failure state) (state, resp)
 
-  runReal :: Env state -> Command state (Var (Reference state)) resp
-          -> CommandMonad state (Return state resp)
+  runReal :: Env state -> Command state resp -> CommandMonad state (Return state resp)
 
   abstractFailure :: state -> SomeException -> Maybe (Failure state)
 
-  monitoring :: (state, state) -> Command state (Var (Reference state)) resp
+  monitoring :: (state, state) -> Command state resp
              -> Either (Reference state) resp -> Property -> Property
   monitoring _states _cmd _resp = id
 
-  commandName :: (forall ref. Show ref => Show (Command state ref resp),
-                  Show resp)
-              => Command state (Var (Reference state)) resp -> String
+  commandName :: (Show (Command state resp), Show resp)
+              => Command state resp -> String
   commandName = head . words . show
 
   runCommandMonad :: state -> CommandMonad state a -> IO a
@@ -80,14 +75,14 @@ deriving instance (Show (Reference state), Show resp) => Show (Return state resp
 
 -- * Generating and shrinking
 
-newtype Commands state = Commands [Untyped (Command state (Var (Reference state)))]
+newtype Commands state = Commands [Untyped (Command state)]
 
-deriving instance Show (Untyped (Command state (Var (Reference state)))) => Show (Commands state)
+deriving instance Show (Untyped (Command state)) => Show (Commands state)
 
-precondition :: StateModel state => state -> Untyped (Command state (Var (Reference state))) -> Bool
+precondition :: StateModel state => state -> Untyped (Command state) -> Bool
 precondition s (Untyped cmd) = isRight (runFake cmd s)
 
-nextState :: StateModel state => state -> Untyped (Command state (Var (Reference state))) -> state
+nextState :: StateModel state => state -> Untyped (Command state) -> state
 nextState s (Untyped cmd) = case runFake cmd s of
   Right (s', _) -> s'
   Left _err -> error "nextState: impossible, we checked for success in precondition"
@@ -96,7 +91,7 @@ instance StateModel state => Arbitrary (Commands state) where
   arbitrary = Commands <$> genCommands initialState
     where
       genCommands :: StateModel state
-                  => state -> Gen [Untyped (Command state (Var (Reference state)))]
+                  => state -> Gen [Untyped (Command state)]
       genCommands s = sized $ \n ->
         let
           w = n `div` 2 + 1
@@ -115,16 +110,14 @@ instance StateModel state => Arbitrary (Commands state) where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
 withStates :: StateModel state
-           => [Untyped (Command state (Var (Reference state)))]
-           -> [(Untyped (Command state (Var (Reference state))), state)]
+           => [Untyped (Command state)]
+           -> [(Untyped (Command state), state)]
 withStates = go initialState
   where
     go _s []           = []
     go  s (cmd : cmds) = (cmd, s) : go (nextState s cmd) cmds
 
-prune :: StateModel state
-      => [Untyped (Command state (Var (Reference state)))]
-      -> [Untyped (Command state (Var (Reference state)))]
+prune :: StateModel state => [Untyped (Command state)] -> [Untyped (Command state)]
 prune = go initialState
   where
     go _s [] = []
@@ -139,18 +132,18 @@ prune = go initialState
 newtype History state = History [Event state]
 
 data Event state
-  = forall resp. Success (Command state (Var (Reference state)) resp) resp
+  = forall resp. Success (Command state resp) resp
   | Failure (Failure state)
 
 runCommands :: forall state. (StateModel state, Monad (CommandMonad state),
                MonadCatch (CommandMonad state), Eq (Failure state),
-               (forall ref resp. Show ref => Show (Command state ref resp)),
+               (forall resp. Show (Command state resp)),
                Show (Reference state), Typeable (Reference state))
             => Commands state -> PropertyM (CommandMonad state) (History state)
 runCommands (Commands cmds0) = History <$> go initialState 0 [] [] cmds0
   where
     go :: state -> Int -> [(Int, Dynamic)] -> [Event state]
-       -> [Untyped (Command state (Var (Reference state)))]
+       -> [Untyped (Command state)]
        -> PropertyM (CommandMonad state) [Event state]
     go _state _i _vars events [] = return (reverse events)
     go  state  i  vars events (Untyped cmd : cmds) = do
