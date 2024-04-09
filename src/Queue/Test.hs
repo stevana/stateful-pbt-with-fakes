@@ -180,11 +180,7 @@ instance StateModel State where
 
   runCommandMonad _ = id
 
-instance Show q => Show (Command State q a) where
-  show (New n)   = "New " ++ show n
-  show (Put x q) = "Put " ++ show x ++ " " ++ show q
-  show (Get q)   = "Get " ++ show q
-  show (Size q)  = "Size " ++ show q
+deriving instance Show q => Show (Command State q a)
 
 prop_ok :: Commands State -> Property
 prop_ok cmds = monadicIO $ do
