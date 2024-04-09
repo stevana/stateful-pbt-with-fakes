@@ -386,6 +386,8 @@ helpful analogy for now).
 
 * Condensed version of qsm's parallel testing built upon the above
 * Ticket dispenser example
+  + prefix generation?
+  + prettyHistory
 
 ### Contract tested fakes
 

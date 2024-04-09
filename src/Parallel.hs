@@ -1,4 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -33,6 +34,8 @@ deriving stock instance
   => Show (ParallelCommands state)
 
 instance StateModel state => Arbitrary (ParallelCommands state) where
+
+  arbitrary :: Gen (ParallelCommands state)
   arbitrary = ParallelCommands <$> go initialState
     where
       go :: state -> Gen [[Untyped (Command state (Var (Reference state)))]]
@@ -42,23 +45,32 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
         in
           frequency
             [ (1, return [])
-            , (w, do k <- chooseInt (2, 5)
-                     mcmds <- vectorOf k (generateCommand s) `suchThatMaybe` parSafe s
+            , (w, do k <- chooseInt (1, 5)
+                     mcmds <- vectorOf k (generateCommand s)
+                                `suchThatMaybe` parSafe s
                      case mcmds of
                        Nothing -> return []
                        Just cmds-> (cmds :) <$> go (advanceState s cmds))
             ]
 
+  shrink :: ParallelCommands state -> [ParallelCommands state]
+  shrink (ParallelCommands cmdss)
+    = map (ParallelCommands . pruneParallel . map (map fst))
+          (shrinkList (shrinkList shrinker) (map withStates cmdss))
+    where
+      shrinker :: (Untyped (Command state (Var (Reference state))), state)
+               -> [(Untyped (Command state (Var (Reference state))), state)]
+      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
-  shrink _s = []
-  {-
-    = filter (validParallelCommands s)
-    . map ParallelCommands
-    . filter (not . null)
-    . shrinkList (shrinkList shrink)
-    . unParallelCommands
--}
-
+pruneParallel :: StateModel state
+              => [[Untyped (Command state (Var (Reference state)))]]
+              -> [[Untyped (Command state (Var (Reference state)))]]
+pruneParallel = go initialState
+  where
+    go _s [] = []
+    go s (cmds : cmdss)
+      | parSafe s cmds = cmds : go (advanceState s cmds) cmdss
+      | otherwise      =        go s cmdss
 
 parSafe :: StateModel state => state -> [Untyped (Command state (Var (Reference state)))] -> Bool
 parSafe s = all (validCommands s) . permutations
@@ -69,69 +81,8 @@ validCommands s  (cmd : cmds)
   | precondition s cmd = validCommands (nextState s cmd) cmds
   | otherwise          = False
 
--- validParallelCommands :: StateModel state => state -> [[Untyped (Command state (Var (Reference state)))]] -> Bool
-validParallelCommands :: StateModel state => state -> ParallelCommands state -> Bool
-validParallelCommands _s = undefined
-
 advanceState :: StateModel state => state -> [Untyped (Command state (Var (Reference state)))] -> state
 advanceState s cmds = foldl' (\ih cmd -> nextState ih cmd) s cmds
-
-  {-
-
-  shrink (Commands cmds) =
-    map (Commands . prune . map fst) (shrinkList shrinker (withStates cmds))
-    where
-      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
-
-withStates :: StateModel state
-           => [Untyped (Command state (Var (Reference state)))]
-           -> [(Untyped (Command state (Var (Reference state))), state)]
-withStates = go initialState
-  where
-    go _s []           = []
-    go  s (cmd : cmds) = (cmd, s) : go (nextState s cmd) cmds
-
-prune :: StateModel state
-      => [Untyped (Command state (Var (Reference state)))]
-      -> [Untyped (Command state (Var (Reference state)))]
-prune = go initialState
-  where
-    go _s [] = []
-    go  s (cmd : cmds)
-      | precondition s cmd = cmd : go (nextState s cmd) cmds
-      | otherwise          = go s cmds
-
-
- advanceModel :: Model -> [Command] -> Model
- advanceModel m cmds = foldl (\ih cmd -> fst (step ih cmd)) m cmds
-
- concSafe :: Model -> [Command] -> Bool
- concSafe m = all (validProgram m) . permutations
-
- validProgram :: Model -> [Command] -> Bool
- validProgram _model _cmds = True
-
- validConcProgram :: Model -> ConcProgram -> Bool
- validConcProgram m0 (ConcProgram cmdss0) = go m0 True cmdss0
-   where
-     go :: Model -> Bool -> [[Command]] -> Bool
-     go _m False _              = False
-     go _m acc   []             = acc
-     go m _acc   (cmds : cmdss) = go (advanceModel m cmds) (concSafe m cmds) cmdss
-
-hrinking concurrent programs is a bit more involved then below if we want to
-et nice minimal counterexamples, we'll get back to this in one of the
-xercises.
-
- shrinkConcProgram :: Model -> ConcProgram -> [ConcProgram]
- shrinkConcProgram m
-   = filter (validConcProgram m)
-   . map ConcProgram
-   . filter (not . null)
-   . shrinkList (shrinkList shrinkCommand)
-   . unConcProgram
-
--}
 
 ------------------------------------------------------------------------
 
