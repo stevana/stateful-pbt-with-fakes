@@ -195,7 +195,7 @@ important omission.
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015. |
-| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking of stateful programs, it's not clear to me how it relates to Quviq's Erlang QuickcCheck's parallel testing though. |
+| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it doesn't seem to reuse the sequential state machine model like in Quviq QuickCheck's parallel testing. |
 | SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016. |
 | propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020. |
 | jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
@@ -375,6 +375,8 @@ familiar with discrete math might also notice the structural similarity of PBT
 with proof by induction, in a sense: the more unit tests we generate the closer
 we come to approximating proof by induction (not quite true but could be a
 helpful analogy for now).
+
+XXX: https://fsharpforfunandprofit.com/posts/property-based-testing-2/
 
 * Most tutorials on property-based testing only cover testing pure functions
 
