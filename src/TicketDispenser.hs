@@ -24,18 +24,17 @@ instance Show (Opaque a) where
 
 data State = NoState | State Int
 
-type Ref = Var (Opaque (IORef Int))
-
 instance StateModel State where
 
   initialState = NoState
+
+  type Reference State = Opaque (IORef Int)
 
   data Command State resp where
     New        :: Command State (Var (Reference State))
     TakeTicket :: Var (Reference State) -> Command State Int
     Reset      :: Var (Reference State) -> Command State ()
 
-  type Reference State = Opaque (IORef Int)
   type Failure State = ()
 
   generateCommand :: State -> Gen (Untyped (Command State))
@@ -44,7 +43,6 @@ instance StateModel State where
     [ (1, Untyped <$> return (Reset (Var 0)))
     , (9, Untyped <$> return (TakeTicket (Var 0)))
     ]
-
 
   runCommandMonad _ = id
 

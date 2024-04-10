@@ -18,15 +18,20 @@ import Control.Monad.Catch
 import Data.Dynamic
 import Data.Either
 import Data.Kind
+import Data.Void
 import Test.QuickCheck hiding (Failure, Success)
 import Test.QuickCheck.Monadic
 
 ------------------------------------------------------------------------
 
 class StateModel state where
-  data Command   state :: Type -> Type
+
+  data Command state :: Type -> Type
+
   type Reference state :: Type
-  type Failure   state :: Type
+
+  type Failure state :: Type
+  type Failure state = Void
 
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
@@ -150,8 +155,6 @@ runCommands (Commands cmds0) = History <$> go initialState 0 [] [] cmds0
       pre (precondition state (Untyped cmd))
       let name = commandName cmd
       monitor (tabulate "Commands" [name] . classify True name)
-      -- XXX:
-      -- eRet <- run (try (runReal2 (subst (sub vars) cmd)))
       eRet <- run (try (runReal (sub vars) cmd))
       monitor (counterexample (show cmd ++ " --> " ++ show eRet))
       case (eRet, runFake cmd state) of

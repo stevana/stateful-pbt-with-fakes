@@ -8,12 +8,13 @@ to the mainstream in less than 30 years.
 Under the slogan "don't write tests, generate them" property-based testing has
 gained support from a diverse group of programming language communities.
 
-In fact, the [Wikipedia](https://en.wikipedia.org/wiki/QuickCheck) page for the
-original Haskell QuickCheck implementation lists 57 reimplementations in other
-languages.
+In fact, the Wikipedia page of the original property-basted testing Haskell
+library, [QuickCheck](https://en.wikipedia.org/wiki/QuickCheck), lists 57
+reimplementations in other languages.
 
 In this post I'd like to survey the most popular property-based testing
-implementations and compare them with the state-of-the-art.
+implementations and compare them with what used to be the state-of-the-art 15
+years ago (2009).
 
 As the title already gives away, most of the libraries do not offer their users
 the most advanced property-based testing features.
@@ -116,8 +117,8 @@ on top of that there's concurrency everywhere. So even the second, monadic,
 version of QuickCheck didn't turn out to be ergonomic enough for the job.
 
 This is what motivated the closed source Quviq QuickCheck version written in
-Erlang, first mentioned in the paper [Testing telecoms software with Quviq
-QuickCheck](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
+Erlang, first mentioned in the paper [*Testing telecoms software with Quviq
+QuickCheck*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
 (2006).
 
 The main features of the closed source version that, as we shall see, are still
@@ -190,6 +191,7 @@ important omission.
 | Hypothesis | Python | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | PropEr | Erlang | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | First open source library to support both? |
 | quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| proptest | Rust | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | See proptest-state-machine. |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015. |
@@ -198,9 +200,13 @@ important omission.
 | propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020. |
 | jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
 | QuickTheories | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less." |
+| qcheck-stm | OCaml | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | |
 | FsCheck | F# | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016. |
 | test.check | Clojure | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
+| theft | C | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | RapidCheck | C++ | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
+| lua-quickcheck | Lua | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| Eris | PHP | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/nick8325/quickcheck/issues/139) to add stateful testing since 2016. |
 | Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104). |
 | quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
@@ -285,8 +291,9 @@ formal specification to a lot of programmers without the formal proof part.
 John has written papers and given talks on the topic of making property-based
 testing of pure functions more accessible to programmers:
 
-* [How to specify it! A Guide to Writing Properties of Pure
-  Functions](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf) (2020)
+* [*How to specify it! A Guide to Writing Properties of Pure
+  Functions*](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf)
+  (2020)
 
 * [Building on developers' intuitions to create effective property-based
   tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ) (2019)
@@ -373,12 +380,13 @@ helpful analogy for now).
 
 ### Stateful property-based testing in ~150 LOC
 
-* John's MGS course and quickcheck-dynamic
+* John's MGS course (2019) and quickcheck-dynamic
   + https://www.cse.chalmers.se/~rjmh/MGS2019/
   - still no parallel testing
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
 * Queue example
+  + regression tests
   + negative tests
   + proper coverage
 
@@ -404,6 +412,14 @@ Having a compact code base makes it cheaper to make experimental changes.
 * Can we use
   [`MonadAsync`](https://hackage.haskell.org/package/io-classes-1.4.1.0/docs/Control-Monad-Class-MonadAsync.html)
   and [IOSim](https://hackage.haskell.org/package/io-sim) to make parallel testing deterministic?
+
+* Improving Random Generation
+  + Generating Good Generators for Inductive Relations [POPL’18]
+  + Beginner’s Luck [POPL’17]
+
+* Incorporating Other Testing Techniques
+  + Coverage Guided, Property Based Testing [OOPSLA’19]
+  + Combinatorial Property-Based Testing: Do Judge a Test by its Cover [ESOP’21]
 
 * Distributed systems
   - Fault injection
