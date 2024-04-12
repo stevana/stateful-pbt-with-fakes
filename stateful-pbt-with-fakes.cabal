@@ -30,6 +30,10 @@ library
     Queue.Fake
     Queue.Real
     Queue.Test
+    Registry.Real
+    Registry.RealBuggy
+    Registry.Test
+    Stateful
     StateModel
     TicketDispenser
 

@@ -146,7 +146,7 @@ to [Linearizability: a correctness condition for concurrent
 objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) which is the
 main technique behind it.
 
-I'd like to stress that no Quiviq QuickCheck library code is every shared in any
+I'd like to stress that no Quviq QuickCheck library code is every shared in any
 of these papers, they only contain the library APIs (which are public) and test
 examples implemented using said APIs.
 
@@ -195,7 +195,7 @@ important omission.
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015. |
-| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it doesn't seem to reuse the sequential state machine model like in Quviq QuickCheck's parallel testing. |
+| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it seems different from Quviq QuickCheck's parallel testing. In particular it doesn't seem to reuse the sequential state machine model nor use linearisability. |
 | SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016. |
 | propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020. |
 | jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
@@ -214,8 +214,7 @@ important omission.
 ## Analysis
 
 By now I hope that I've managed to convince you that most property-based testing
-libraries do not implement the state-of-the-art when it comes to property-based
-testing.
+libraries do not implement what used to be the state-of-the-art in 2009.
 
 Many lack stateful testing via state machines (2007) and most lack parallel
 testing support (2009).

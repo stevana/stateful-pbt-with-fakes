@@ -5,7 +5,7 @@
 -- THIS CODE!!! The exercise is one in black box testing.
 
 
-module RegistryBuggy where
+module Registry.Real where
 
 import Data.IORef
 import Control.Monad
@@ -34,7 +34,7 @@ register name tid = do
   if ok && name `notElem` map fst reg && tid `notElem` map snd reg
     then atomicModifyIORef registry $ \reg' ->
            if name `notElem` map fst reg' && tid `notElem` map snd reg'
-             then ([(name,tid)],())
+             then ((name,tid):reg',())
              else (reg',badarg)
     else badarg
 
