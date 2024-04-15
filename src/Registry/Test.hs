@@ -45,12 +45,12 @@ instance StateModel RegState where
     deriving (Eq, Show, Functor, Foldable)
 
   generateCommand :: RegState -> Gen (Symbolic RegState)
-  generateCommand s =
-    oneof [ return Spawn
-          , Register <$> arbitraryName <*> elements (tids s)
-          , Unregister <$> arbitraryName
-          , WhereIs <$> arbitraryName
-          ]
+  generateCommand s = oneof
+    [ return Spawn
+    , Register <$> arbitraryName <*> elements (tids s)
+    , Unregister <$> arbitraryName
+    , WhereIs <$> arbitraryName
+    ]
 
   type Failure RegState = ()
 

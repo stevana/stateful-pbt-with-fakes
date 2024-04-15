@@ -63,11 +63,12 @@ class ( Monad (CommandMonad state)
              -> Property -> Property
   monitoring _states _cmd _resp = id
 
-  commandName :: (Show (Command state resp), Show resp)
-              => Command state resp -> String
+  commandName :: (Show (Command state ref), Show ref)
+              => Command state ref -> String
   commandName = head . words . show
 
   abstractFailure :: state -> SomeException -> Maybe (Failure state)
+  abstractFailure _s _err = Nothing
 
   runCommandMonad :: state -> CommandMonad state a -> IO a
 
@@ -214,12 +215,14 @@ runCommands (Commands cmds0) = History <$> go initialState 0 [] [] cmds0
           -- monitor (counterexample ("    Checking: " ++ show resp ++ " == " ++ show (fmap (sub vars') resp')))
           assert (resp == fmap (sub vars') resp')
           go state' (i + length refs) vars' (Success cmd' resp : events) cmds
-        (Left _, Ok _) -> do
+        (Left _, Ok (_state', _resp)) -> do
           monitor (counterexample "Bla")
           assert False
           return (reverse events)
-        (Right _, Throw _) -> do
-          monitor (counterexample "Bla2")
+        (Right resp, Throw _) -> do
+          let state' = nextState state cmd
+          -- XXX: Why doesn't this that bigJug = 4 in the DieHard example?
+          monitor (monitoring (state, state') cmd' resp)
           assert False
           return (reverse events)
 

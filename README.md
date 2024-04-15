@@ -422,6 +422,8 @@ Having a compact code base makes it cheaper to make experimental changes.
   + Coverage Guided, Property Based Testing [OOPSLA’19]
   + Combinatorial Property-Based Testing: Do Judge a Test by its Cover [ESOP’21]
 
+* Liveness a la quickcheck-dynamic?
+
 * Distributed systems
   - Fault injection
     + Jepsen's knossos checker

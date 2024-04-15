@@ -22,6 +22,7 @@ common warnings
 library
   import:           warnings
   exposed-modules:
+    DieHard
     FileSystem
     FileSystem.Fake
     FileSystem.Interface
