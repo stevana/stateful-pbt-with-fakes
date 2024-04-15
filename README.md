@@ -185,31 +185,31 @@ important omission.
 
 | Library | Language | Stateful | Parallel | Notes |
 | :---    | :---     | :---:    | :---:    | :---  |
-| ScalaCheck | Scala | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has some support for parallel testing, but it's limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`). |
+| Eris | PHP | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| FsCheck | F# | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016. |
 | Gopter | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
-| Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104). |
 | Hypothesis | Python | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | PropEr | Erlang | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | First open source library to support both? |
-| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/nick8325/quickcheck/issues/139) to add stateful testing since 2016. |
+| QuickTheories | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less." |
+| Rapid | Go | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| RapidCheck | C++ | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
+| ScalaCheck | Scala | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has some support for parallel testing, but it's limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`). |
+| SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016. |
+| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it seems different from Quviq QuickCheck's parallel testing. In particular it doesn't seem to reuse the sequential state machine model nor use linearisability. |
+| jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
+| jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015. |
+| lua-quickcheck | Lua | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
+| propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020. |
 | proptest | Rust | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | See proptest-state-machine. |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
-| rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
-| jsverify | JavaScript | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015. |
-| fast-check | TypeScript | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it seems different from Quviq QuickCheck's parallel testing. In particular it doesn't seem to reuse the sequential state machine model nor use linearisability. |
-| SwiftCheck | Swift | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016. |
-| propcheck | Elixir | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020. |
-| jetCheck | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.". |
-| QuickTheories | Java | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less." |
 | qcheck-stm | OCaml | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | |
-| FsCheck | F# | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016. |
+| quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
+| rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | test.check | Clojure | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
 | theft | C | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
-| RapidCheck | C++ | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015. |
-| lua-quickcheck | Lua | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | |
-| Eris | PHP | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
-| QuickCheck | Haskell | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | There's an open [issue](https://github.com/nick8325/quickcheck/issues/139) to add stateful testing since 2016. |
-| Hedgehog | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104). |
-| quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
 
 ## Analysis
 
@@ -227,7 +227,7 @@ testing can be generalised to parallel testing without a substantial redesign of
 their APIs. I don't think there's a single example of a library to which
 parallel testing was added later, rather than designed for from the start.
 
-__Why are property-based testing libraries in such a sad state?__
+### Why are property-based testing libraries in such a sad state?
 
 Here are three reasons I've heard from John:
 
@@ -264,7 +264,8 @@ Here are three reasons I've heard from John:
    > it seems to be succeeding.
 
 A cynic might argue that there's a conflict of interest between doing research
-and education on one hand and running a company on the other.
+and education on one hand and running a company that sells licenses and training
+on the other.
 
 Let me be clear that I've the utmost respect for John, and I believe what he
 says to be true and I believe he acts with the best intentions.
@@ -278,7 +279,7 @@ protocol or use concurrent datastructures, which all benefit from these
 features.
 
 Regarding formal specification requiring a special way of thinking and therefor
-training, I believe this is a correct assesment, but I also beleive that this is
+training, I believe this is a correct assesment, but I also believe that this is
 already true for property-based testing of pure functions.
 
 Formal specification and proofs are fundamental to computer science and have
@@ -297,45 +298,82 @@ testing of pure functions more accessible to programmers:
 * [Building on developers' intuitions to create effective property-based
   tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ) (2019)
 
-* experience reports already mentioned above
+Can we do the same for stateful and parallel testing? I think stateful
+specifications are not necessarily always harder than specifications for pure
+functions.
 
-* can we do the same for stateful and parallel testing? not necessarily harder
-  than pure functions.
+The experience reports that we've already mentioned above, usually contain some
+novelty (which warrents a new paper) rather than general advice which can be
+done with the vanilla stateful and parallel testing features.
 
-* Regarding keeping the source closed helping with adoption
-  + perhaps the most controversial point
+Regarding keeping the source closed helping with adoption, I think this is
+perhaps the most controversial point that John makes.
 
-  + but if you see it from john's perspective, how else would an academic get
-    funding to work on tooling (which typically isn't reconginised as doing
-    research) feedback from industry, able to hire people
-  + open source is broken, from a financial perspective (unless you are a big company)
+If we try to see it from John's perspective, how else would an academic get
+funding to work on tooling (which typically isn't reconginised as doing
+research), feedback from industry, or be able to hire people? Surely, one cannot
+expect research funding agencies to pay for this?
 
-  + Part of the original implementations spread to other languages can perhaps
-    be attributed to the fact that the original implementation is small, around
-    300 lines of code?
-  + Trying to replicate the results from the Quviq QuickCheck papers (from 2006
-    and onwards) without buying a Quviq QuickCheck license, is almost impossible
-    without a lot of reverse engineering work.
+On the other hand one could ask why there isn't a requirement that published
+research should be reproducable using open source tools (or at least tools that
+are freely available to the public and other researchers)?
 
-* state machine testing gets a [bad
-  reputation](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
-  for being hard to learn and heavyweight
+Trying to replicate the results from the Quviq QuickCheck papers (from 2006 and
+onwards) without buying a Quviq QuickCheck license, is almost impossible without
+a lot of reverse engineering work.
 
+I suppose one could argue that one could have built a business around an open
+source tool, only charging for the training and consulting, but given how broken
+open source is today, unless you are a big company (which takes more than it
+gives back), it's definitely not clear that it would have worked (and it was
+probably even worse back in 2006).
+
+So here we are 15-18 years after the first papers that introduced stateful and
+parallel testing, dispite the best efforts of everyone involved, and we still
+don't have these features in most property-based testing libraries, even though
+these features are clearly useful.
+
+Personally I got quite sad when I saw that stateful testing was
+[called](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
+harder to learn and more heavyweight than an ad hoc approximation of it using
+vanilla property-based testing.
+
+I think this is evidence of the fact that people don't fully understand the full
+benefits of parallel testing. While it's true that stateful testing adds another
+layer or API that you have to learn, but from this sequential model we can
+derive parallel tests by adding two lines of code.
+
+### What can we do about it?
+
+I like to think that part of the original QuickCheck library's success in
+spreading to so many other languages can be attributed to the fact that it is
+small, around 300 lines of code, and is part of the original paper.
+
+Perhaps if the code for stateful and parallel testing was as small and was
+provided in the papers, then we would have more libraries supporting those
+features by now?
+
+Regarding specifications requring a different way of thinking that needs
+training, perhaps we can avoid this by not using state machines as the basis for
+the specifications, but rather reuse techniques that programmers are already
+familar with?
 
 ## Synthesis
 
-In the rest of this post:
+In order to test the above hypothesis, I'd like to spend the rest of this post
+as follows:
 
   1. show how one can implement stateful property-based testing in 150 lines of code.
-     This is the first step
 
   2. add parallel testing in ~300 lines of code
 
   3. make specifications simpler using fakes, and put this technique in context
      of software development at large.
 
+Before we get started with stateful testing, let's first recap what vanilla
+(stateless) property-based testing does.
 
-### QuickCheck recap (stateless property-based testing)
+### Property-based testing recap
 
 The original idea is that we can test some pure (or side-effect free) function
 $f : A \to B$ by randomly generating its argument ($A$) and then checking that
@@ -346,9 +384,6 @@ function ($reverse$), then the argument we need to randomly generate is a list,
 and the predicate can be anything we'd like to hold for our list reversal
 function, for example we can specify that reversing the result of rerversal
 gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
-
-* Involution, and other common properties
-
 
 Before we get into how to apply property-based testing (PBT) to stateful
 systems, lets recall what PBT of pure programs looks like. Here are a few
