@@ -1,36 +1,48 @@
-{-# LANGUAGE DeriveFunctor #-}
-
 module Queue.Fake where
 
-import Control.Exception
+import Data.Map (Map)
+import qualified Data.Map as Map
+
+import Queue.Real (Queue)
+import Stateful (Return(..), Var(..))
 
 ------------------------------------------------------------------------
 
-type MockOp a = Either Err a
+type State = Map (Var Queue) FQueue
 
-data Err = NegativeSize Int | NoSpace | Empty
-  deriving (Show, Eq)
-
-instance Exception Err
-
-data MQueue a = MQueue
-  { capacity :: Int
-  , content  :: [a]
+data FQueue = FQueue
+  { fqElems :: [Int]
+  , fqSize  :: Int
   }
-  deriving Functor
+  deriving Show
 
-mNew :: Int -> MockOp (MQueue a)
-mNew n | n >= 0    = Right (MQueue n [])
-       | otherwise = Left (NegativeSize n)
+data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
+  deriving (Eq, Show)
 
-mPut :: a -> MQueue a -> MockOp ((), MQueue a)
-mPut x q | length (content q) < capacity q = Right ((), q { content = content q ++ [x] })
-         | otherwise = Left NoSpace
+------------------------------------------------------------------------
 
-mGet :: MQueue a -> MockOp (a, MQueue a)
-mGet q = case content q of
-  []       -> Left Empty
-  (x : xs) -> Right (x, q { content = xs })
+fnew :: Int -> State -> Return Err (State, Var Queue)
+fnew sz s =
+  let
+    v = Var (Map.size s)
+  in
+    return (Map.insert v (FQueue [] sz) s, v)
 
-mSize :: MQueue a -> MockOp (Int, MQueue a)
-mSize q = Right (length (content q), q)
+fput :: Var Queue -> Int -> State -> Return Err (State, ())
+fput q i s
+  | q `Map.notMember` s = Precondition QueueDoesNotExist
+  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Precondition QueueIsFull
+  | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
+
+fget :: Var Queue -> State -> Return Err (State, Int)
+fget q s
+  | q `Map.notMember` s        = Precondition QueueDoesNotExist
+  | null (fqElems (s Map.! q)) = Precondition QueueIsEmpty
+  | otherwise = case fqElems (s Map.! q) of
+      [] -> error "fget: impossible, we checked that it's non-empty"
+      i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
+
+fsize :: Var Queue -> State -> Return Err (State, Int)
+fsize q s
+  | q `Map.notMember` s = Precondition QueueDoesNotExist
+  | otherwise           = return (s, length (fqElems (s Map.! q)))

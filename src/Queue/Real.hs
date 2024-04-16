@@ -1,57 +1,72 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE CApiFFI #-}
 
 module Queue.Real where
 
-import Data.Array.IO
-import Data.IORef
+import Foreign
+import Foreign.C.Types
 
 ------------------------------------------------------------------------
--- Bounded queues, without any error checking.
--- https://github.com/nick8325/quickcheck/issues/139
 
-data Queue a =
-  Queue {
-    queue_array :: IOArray Int a,
-    queue_peek  :: IORef Int,
-    queue_poke  :: IORef Int }
+data CQueue = CQueue
+  { _buf  :: Ptr CInt
+  , _inp  :: CInt
+  , _outp :: CInt
+  , _size :: CInt
+  }
 
--- XXX: can we avoid having to define Eq and Show?
-instance Eq (Queue a) where
-  (==) = undefined
+instance Storable CQueue where
+  alignment _ = 8
+  sizeOf _    = 20
 
-instance Show (Queue a) where
-  show = undefined
+  peek ptr = CQueue
+    <$> peekByteOff ptr 0
+    <*> peekByteOff ptr 8
+    <*> peekByteOff ptr 12
+    <*> peekByteOff ptr 16
 
-new :: Int -> IO (Queue a)
-new n = do
-  array <- newArray (0, n) undefined
-  peek  <- newIORef 0
-  poke  <- newIORef 0
-  return (Queue array peek poke)
+  poke ptr (CQueue b i o s) = do
+    pokeByteOff ptr 0 b
+    pokeByteOff ptr 8 i
+    pokeByteOff ptr 12 o
+    pokeByteOff ptr 16 s
 
-put :: a -> Queue a -> IO ()
-put x Queue{..} = do
-  poke <- readIORef queue_poke
-  writeArray queue_array poke x
-  n <- arraySize queue_array
-  writeIORef queue_poke $! (poke + 1) `mod` n
+foreign import capi "queue.h new"  new_  :: CInt -> IO (Ptr CQueue)
+foreign import capi "queue.h put"  put_  :: Ptr CQueue -> CInt -> IO ()
+foreign import capi "queue.h get"  get_  :: Ptr CQueue -> IO CInt
+foreign import capi "queue.h size" size_ :: Ptr CQueue -> IO CInt
 
-get :: Queue a -> IO a
-get Queue{..} = do
-  peek <- readIORef queue_peek
-  x <- readArray queue_array peek
-  n <- arraySize queue_array
-  writeIORef queue_peek $! (peek + 1) `mod` n
-  return x
+foreign import capi "queue.h newBroken"  newBroken_  :: CInt -> IO (Ptr CQueue)
+foreign import capi "queue.h sizeBroken" sizeBroken_ :: Ptr CQueue -> IO CInt
 
-size :: Queue a -> IO Int
-size Queue{..} = do
-  peek <- readIORef queue_peek
-  poke <- readIORef queue_poke
-  n <- arraySize queue_array
-  return ((poke-peek) `mod` n)
+------------------------------------------------------------------------
 
-arraySize :: (Num i, Ix i) => IOArray i a -> IO i
-arraySize array = do
-  (lo, hi) <- getBounds array
-  return (hi-lo+1)
+newtype Queue = Queue (ForeignPtr CQueue)
+  deriving (Eq, Show)
+
+new :: Int -> IO Queue
+new sz = do
+  ptr <- new_ (fromIntegral sz)
+  fptr <- newForeignPtr finalizerFree ptr
+  return (Queue fptr)
+
+newBroken :: Int -> IO Queue
+newBroken sz = do
+  ptr <- newBroken_ (fromIntegral sz)
+  fptr <- newForeignPtr finalizerFree ptr
+  return (Queue fptr)
+
+put :: Queue -> Int -> IO ()
+put (Queue fptr) n = withForeignPtr fptr $ \q ->
+  put_ q (fromIntegral n)
+
+get :: Queue -> IO Int
+get (Queue fptr) = withForeignPtr fptr $ \q ->
+  fromIntegral <$> get_ q
+
+size :: Queue -> IO Int
+size (Queue fptr) = withForeignPtr fptr $ \q ->
+  fromIntegral <$> size_ q
+
+sizeBroken :: Queue -> IO Int
+sizeBroken (Queue fptr) = withForeignPtr fptr $ \q ->
+  fromIntegral <$> sizeBroken_ q

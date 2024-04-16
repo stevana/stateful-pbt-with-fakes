@@ -28,10 +28,8 @@ library
     FileSystem.Test
     Parallel
     Queue.Fake
-    Queue.FFI
     Queue.Real
     Queue.Test
-    Queue.Test2
     Registry.Real
     Registry.RealBuggy
     Registry.Test
