@@ -131,20 +131,20 @@ not found in many open source versions are:
 We shall describe how these features work in detail later.
 
 For now let's just note that *stateful* testing in its current form was first
-mentioned in [QuickCheck testing for fun and
-profit](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
+mentioned in [*QuickCheck testing for fun and
+profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
 (2007). This paper also mentions that it took John four iterations to get the
 stateful testing design right, so while the 2006 paper already does mention
 stateful testing it's likely containing one of those earlier iteration of it.
 
 While the 2007 paper also mentiones *parallel* testing via traces and
-interleavings, it's vague on details. It's only later in [Finding Race
+interleavings, it's vague on details. It's only later in [*Finding Race
 Conditions in Erlang with QuickCheck and
-PULSE](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (ICFP 2009) that parallel testing is described in detail including a reference
-to [Linearizability: a correctness condition for concurrent
-objects](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) which is the
-main technique behind it.
+to [*Linearizability: a correctness condition for concurrent
+objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990) which is
+the main technique behind it.
 
 I'd like to stress that no Quviq QuickCheck library code is every shared in any
 of these papers, they only contain the library APIs (which are public) and test
@@ -152,8 +152,8 @@ examples implemented using said APIs.
 
 After that most papers are experience reports of applying Quviq QuickCheck at
 different companies, e.g. *Testing A Database for Race Conditions with
-QuickCheck* (2011), *[Testing the hard stuff and staying
-sane](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)*
+QuickCheck* (2011), [*Testing the hard stuff and staying
+sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014), *Testing AUTOSAR software with QuickCheck* (2015), *Mysteries of
 Dropbox: Property-Based Testing of a Distributed Synchronization Service*
 (2016).
@@ -241,7 +241,7 @@ Here are three reasons I've heard from John:
    them proper training, John said in an
    [interview](https://youtu.be/x4BNj7mVTkw?t=898);
 
-3. A closed source product and associated services
+3. Open source didn't work, a closed source product and associated services
    [helps](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
    adoption:
 
@@ -264,8 +264,8 @@ Here are three reasons I've heard from John:
    > it seems to be succeeding.
 
 A cynic might argue that there's a conflict of interest between doing research
-and education on one hand and running a company that sells licenses and training
-on the other.
+and education on one hand and running a company that sells licenses, training
+and consulting on the other.
 
 Let me be clear that I've the utmost respect for John, and I believe what he
 says to be true and I believe he acts with the best intentions.
@@ -279,7 +279,7 @@ protocol or use concurrent datastructures, which all benefit from these
 features.
 
 Regarding formal specification requiring a special way of thinking and therefor
-training, I believe this is a correct assesment, but I also believe that this is
+training, I believe this is a correct assessment, but I also believe that this is
 already true for property-based testing of pure functions.
 
 Formal specification and proofs are fundamental to computer science and have
@@ -341,9 +341,15 @@ vanilla property-based testing.
 I think this is evidence of the fact that people don't fully understand the full
 benefits of parallel testing. While it's true that stateful testing adds another
 layer or API that you have to learn, but from this sequential model we can
-derive parallel tests by adding two lines of code.
+derive parallel tests by adding two lines of code. Can't blame them when only
+4/25 libraries show how to do this.
 
 ### What can we do about it?
+
+Even if John is right and that keeping it closed source has helped adoption in
+industry, it has not helped open source adoption. Or perhaps rather, it's
+unlikely that a company that pays for a licence in Erlang would then go and port
+the library in another language.
 
 I like to think that part of the original QuickCheck library's success in
 spreading to so many other languages can be attributed to the fact that it is
@@ -416,26 +422,76 @@ XXX: https://fsharpforfunandprofit.com/posts/property-based-testing-2/
 
 ### Stateful property-based testing in ~150 LOC
 
+#### Prior work
+
+* Nick's initial [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
 * John's MGS course (2019) and quickcheck-dynamic
   + https://www.cse.chalmers.se/~rjmh/MGS2019/
   - still no parallel testing
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
+* qsm
+
+#### Implementation
+
+#### Example: array-based queue
+
+Similar to the queue example from [*Testing the hard stuff and staying
+sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
+(2014)
+
+* Taken from Nick's first
+  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
 
 * Queue example
   + regression tests
   + negative tests
   + proper coverage
 
+#### Example: process registry
+
+This example comes from the paper [*QuickCheck testing for fun and
+profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
+(2007).
+
+#### Example: file system
+
+#### Example: jug puzzle from Die Hard 3
+
+
 ### Parallel property-based testing in ~300 LOC
 
-* Condensed version of qsm's parallel testing built upon the above
-* Ticket dispenser example
-  + prefix generation?
-  + prettyHistory
+#### Prior work
 
-### Contract tested fakes
+* PropEr
+* qsm
+* Jepsen's Knossos
+* Linearizability paper
+* Erlang
 
+#### Implementation
+
+
+#### Example: ticket dispenser
+
+[*Testing the hard stuff and staying
+sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
+(2014)
+
+#### Example: process registry
+
+The parallel tests for the process registry was introduced in [*Finding Race
+Conditions in Erlang with QuickCheck and
+PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+(2009)
+
+### Integration testing with contract tested fakes
+
+* Vanilla property-based testing generates unit tests, what about stateful and
+  parallel property-based testing?
+
+* https://martinfowler.com/bliki/ContractTest.html
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
+* [Integrated Tests Are A Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger
 * Queue example again?
 
 ## Future work

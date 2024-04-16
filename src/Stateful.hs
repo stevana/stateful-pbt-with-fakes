@@ -7,6 +7,7 @@
 
 module Stateful where
 
+import Control.Monad
 import Control.Monad.Catch
 import Data.Dynamic
 import Data.Either
@@ -31,6 +32,7 @@ class ( Monad (CommandMonad state)
       , Eq (Failure state)
       , Show (Command state (Var (Reference state)))
       , Show (Reference state)
+      , Show (Failure state)
       , Typeable (Reference state)
       , Typeable state
       ) => StateModel state where
@@ -80,6 +82,7 @@ data Return e a
   = Precondition e
   | Throw e
   | Ok a
+  deriving Show
 
 instance Functor (Return e) where
   fmap _f (Precondition e) = Precondition e
@@ -212,16 +215,18 @@ runCommands (Commands cmds0) = History <$> go initialState 0 [] [] cmds0
                    | otherwise = []
               vars' | null refs = vars
                     | otherwise = vars ++ zip [i..] (map toDyn refs)
-          -- monitor (counterexample ("    Checking: " ++ show resp ++ " == " ++ show (fmap (sub vars') resp')))
+          when (resp /= fmap (sub vars') resp') $
+            monitor (counterexample ("\nExpected: " ++ show (fmap (sub vars') resp') ++ "\nGot: " ++ show resp))
           assert (resp == fmap (sub vars') resp')
           go state' (i + length refs) vars' (Success cmd' resp : events) cmds
         (Left _, Ok (_state', _resp)) -> do
           monitor (counterexample "Bla")
           assert False
           return (reverse events)
-        (Right resp, Throw _) -> do
+        (Right resp, Throw err) -> do
           let state' = nextState state cmd
           -- XXX: Why doesn't this that bigJug = 4 in the DieHard example?
+          monitor (counterexample ("Got: " ++ show resp ++ "\nExpected: " ++ show err))
           monitor (monitoring (state, state') cmd' resp)
           assert False
           return (reverse events)
