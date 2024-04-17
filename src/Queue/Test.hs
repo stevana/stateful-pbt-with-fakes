@@ -4,9 +4,10 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Queue.Test where
 
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Test.QuickCheck
 import Test.QuickCheck.Monadic

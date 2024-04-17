@@ -10,7 +10,6 @@ module Stateful where
 import Control.Monad
 import Control.Monad.Catch
 import Data.Dynamic
-import Data.Either
 import Data.Foldable
 import Data.Kind
 import Data.Void
@@ -71,15 +70,6 @@ class ( Monad (CommandMonad state)
 
 ------------------------------------------------------------------------
 
--- XXX:
-{-
-data FakeMonad state a
-  = Return a
-  | Assert String Bool (FakeMonad state a)
-  | Precondtion String (state -> Bool) (FakeMonad state a)
-  | Sometimes
-  | Put state
-  -}
 
 -- XXX: Can be removed when StateModel.hs is removed?
 type Env state = Var (Reference state) -> Reference state
@@ -126,9 +116,7 @@ instance StateModel state => Arbitrary (Commands state) where
     where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
-withStates :: StateModel state
-           => [Symbolic state]
-           -> [(Symbolic state, state)]
+withStates :: StateModel state => [Symbolic state] -> [(Symbolic state, state)]
 withStates = go initialState
   where
     go _s []           = []
@@ -146,6 +134,27 @@ prune = go initialState
 
 -- * Running
 
+-- The response might contain new references, e.g. `Spawn` returns a
+-- `ThreadId`, these need to be added to the environment, but a
+-- response can also contain referenses that shouldn't be added to the
+-- environment, e.g. `WhereIs` also returns a `ThreadId`. The design
+-- choice I went for here is to check if the returned references are
+-- disjoint from the environment, if so we assume it's a spawn-like
+-- operation, while if they intersect we assume a whereis-like
+-- operation.
+
+-- Another option might be to make a `newtype Unfoldable a =
+-- Unfoldable a` whose `Foldable` instance has a `toList` that returns
+-- the the empty list. That way we can wrap the `ThreadId` of
+-- `WhereIs` in `Unfoldable` and always add all references that the
+-- response returns to the environment.
+
+-- Yet another option would be to introduce a new type class
+-- `ReturnsReferences` and ask the user to manually implement it.
+
+-- XXX: This can be improved...
+--   1. new refs always +1 of length vars (there can be more than one new ref)
+--   2. ops that return a new ref and old refs can't be handled here
 runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
 runCommands (Commands cmds0) = go initialState 0 [] cmds0
@@ -154,48 +163,28 @@ runCommands (Commands cmds0) = go initialState 0 [] cmds0
        -> PropertyM (CommandMonad state) ()
     go _state _i _vars [] = return ()
     go  state  i  vars (cmd : cmds) = do
-      pre (precondition state cmd)
-      let name = commandName cmd
-          ccmd = fmap (sub vars) cmd
-      monitor (tabulate "Commands" [name] . classify True name)
-      cresp <- run (runReal ccmd)
-      let Right (state', resp') = runFake cmd state
-      monitor (counterexample (show cmd ++ " --> " ++ show cresp))
-      monitor (monitoring (state, state') ccmd cresp)
-      -- The response might contain new references, e.g. `Spawn` returns a
-      -- `ThreadId`, these need to be added to the environment, but a
-      -- response can also contain referenses that shouldn't be added to the
-      -- environment, e.g. `WhereIs` also returns a `ThreadId`. The design
-      -- choice I went for here is to check if the returned references are
-      -- disjoint from the environment, if so we assume it's a spawn-like
-      -- operation, while if they intersect we assume a whereis-like
-      -- operation.
+      case runFake cmd state of
+        Left _err -> pre False
+        Right (state', resp) -> do
+          let name = commandName cmd
+          monitor (tabulate "Commands" [name] . classify True name)
+          let ccmd = fmap (sub vars) cmd
+          cresp <- run (runReal ccmd)
+          monitor (counterexample (show cmd ++ " --> " ++ show cresp))
+          monitor (monitoring (state, state') ccmd cresp)
+          let refs | toList resp `disjoint` map (Var . fst) vars = toList cresp
+                   | otherwise = []
+              vars' | null refs = vars
+                    | otherwise = vars ++ zip [i..] (map toDyn refs)
+              cresp' = fmap (sub vars') resp
+          let ok = cresp == cresp'
+          unless ok $
+            monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
+          assert ok
+          go state' (i + length refs) vars' cmds
 
-      -- Another option might be to make a `newtype Unfoldable a =
-      -- Unfoldable a` whose `Foldable` instance has a `toList` that returns
-      -- the the empty list. That way we can wrap the `ThreadId` of
-      -- `WhereIs` in `Unfoldable` and always add all references that the
-      -- response returns to the environment.
-
-      -- Yet another option would be to introduce a new type class
-      -- `ReturnsReferences` and ask the user to manually implement it.
-
-      -- XXX: This can be improved...
-      --   1. new refs always +1 of length vars (there can be more than one new ref)
-      --   2. ops that return a new ref and old refs can't be handled here
-      let refs | toList resp' `disjoint` map (Var . fst) vars = toList cresp
-               | otherwise = []
-          vars' | null refs = vars
-                | otherwise = vars ++ zip [i..] (map toDyn refs)
-          cresp' = fmap (sub vars') resp'
-      let ok = cresp == cresp'
-      unless ok $
-        monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
-      assert ok
-      go state' (i + length refs) vars' cmds
-
-disjoint :: Eq a => [a] -> [a] -> Bool
-disjoint xs ys = all (`notElem` ys) xs
+    disjoint :: Eq a => [a] -> [a] -> Bool
+    disjoint xs ys = all (`notElem` ys) xs
 
 sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
 sub vars (Var x) =
