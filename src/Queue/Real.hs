@@ -16,7 +16,7 @@ data CQueue = CQueue
 
 instance Storable CQueue where
   alignment _ = 8
-  sizeOf _    = 20
+  sizeOf _    = 24
 
   peek ptr = CQueue
     <$> peekByteOff ptr 0

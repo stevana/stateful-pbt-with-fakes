@@ -15,9 +15,12 @@ import Stateful
 ------------------------------------------------------------------------
 
 data Model = Model
-  { bigJug :: Int
+  { bigJug   :: Int
   , smallJug :: Int
   }
+  deriving (Eq, Show)
+
+data BigJugIs4 = BigJugIs4
   deriving (Eq, Show)
 
 instance StateModel Model where
@@ -25,7 +28,7 @@ instance StateModel Model where
   initialState = Model 0 0
 
   type Reference Model = Void
-  type Failure Model = ()
+  type Failure Model = BigJugIs4
 
   data Command Model r
     = FillBig
@@ -43,10 +46,10 @@ instance StateModel Model where
   generateCommand _s = elements [minBound ..]
 
   runFake :: Command Model r -> Model -> Return (Failure Model) (Model, Response Model r)
-  runFake FillBig      s = done s { bigJug   = 5}
-  runFake FillSmall    s = done s { smallJug = 3}
-  runFake EmptyBig     s = done s { bigJug   = 0}
-  runFake EmptySmall   s = done s { smallJug = 0}
+  runFake FillBig      s = done s { bigJug   = 5 }
+  runFake FillSmall    s = done s { smallJug = 3 }
+  runFake EmptyBig     s = done s { bigJug   = 0 }
+  runFake EmptySmall   s = done s { smallJug = 0 }
   runFake SmallIntoBig (Model big small) =
     let big' = min 5 (big + small) in
     done (Model { bigJug = big'
@@ -68,7 +71,7 @@ instance StateModel Model where
   runCommandMonad _s = id
 
 done :: Model -> Return (Failure Model) (Model, Response Model ref)
-done s' | bigJug s' == 4 = Throw ()
+done s' | bigJug s' == 4 = Throw BigJugIs4
         | otherwise      = Ok (s', Done)
 
 prop_dieHard :: Commands Model -> Property

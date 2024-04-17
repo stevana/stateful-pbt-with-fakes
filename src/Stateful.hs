@@ -98,6 +98,7 @@ instance Monad (Return e) where
   Throw e        >>= _k = Throw e
   Ok x           >>=  k = k x
 
+-- XXX: Can be removed when StateModel.hs is removed?
 type Env state = Var (Reference state) -> Reference state
 
 data Var a = Var Int

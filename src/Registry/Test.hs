@@ -17,7 +17,7 @@ import Stateful
 
 ------------------------------------------------------------------------
 
-data RegState = RegState{
+data RegState = RegState {
     tids :: [Var (ThreadId)],
     regs :: [(String, Var (ThreadId))]
   }

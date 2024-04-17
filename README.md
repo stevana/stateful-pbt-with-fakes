@@ -205,8 +205,10 @@ important omission.
 | proptest | Rust | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | See proptest-state-machine. |
 | proptest-state-machine | Rust | <ul><li>- [x] </li></ul> | <ul><li>- [ ] </li></ul> | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | qcheck-stm | OCaml | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | |
+| quickcheck | Prolog | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | |
 | quickcheck | Rust | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
 | quickcheck-state-machine | Haskell | <ul><li>- [x] </li></ul> | <ul><li>- [x] </li></ul> | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
+| rackcheck | Racket | <ul><li>- [ ] </li></ul> | <ul><li> - [ ] </li></ul> |  |
 | rantly | Ruby | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
 | test.check | Clojure | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
 | theft | C | <ul><li>- [ ] </li></ul> | <ul><li>- [ ] </li></ul> | |
@@ -342,7 +344,7 @@ I think this is evidence of the fact that people don't fully understand the full
 benefits of parallel testing. While it's true that stateful testing adds another
 layer or API that you have to learn, but from this sequential model we can
 derive parallel tests by adding two lines of code. Can't blame them when only
-4/25 libraries show how to do this.
+4/27 libraries show how to do this.
 
 ### What can we do about it?
 
@@ -422,43 +424,301 @@ XXX: https://fsharpforfunandprofit.com/posts/property-based-testing-2/
 
 ### Stateful property-based testing in ~150 LOC
 
+Having recalled how vanilla property-based testing works, let's now build a
+module on top which allows us to do stateful testing.
+
+#### Motivation
+
+XXX: why is stateful testing needed?
+
+Before we do so, a word or two about why we need such a module in the first
+place is in order.
+
+It's certainly possible to test stateful systems using vanilla property-based
+testing, however parallel testing build upon stateful testing...
+
+#### How it works
+
+XXX: how does stateful testing work at a high-level?
+
 #### Prior work
 
-* Nick's initial [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
-* John's MGS course (2019) and quickcheck-dynamic
-  + https://www.cse.chalmers.se/~rjmh/MGS2019/
-  - still no parallel testing
-* Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
-* qsm
+I'd like to explain where my inspiration is coming from, because I think it's
+important to note that the code I'm about to present didn't come from thin air.
+
+I've been thinking about this problem since the end of 2016 as can be witnesed
+by my involvement in the following
+[issue](https://github.com/nick8325/quickcheck/issues/139) about adding stateful
+testing to Haskell's QuickCheck.
+
+My initial attempt eventually turned into the Haskell library
+`quickcheck-state-machine`.
+
+The version below is a combination of my experience building that library, but
+also inspried by:
+
+  1. Nick Smallbone's initial
+  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
+  (2017) from that same issue. (Nick was, and I think still is, the main
+  maintainer of the original QuickCheck library);
+
+  2. John's Midlands Graduate School
+  [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
+
+* 3. Edsko de Vries' "lockstep"
+  [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
+
+I'll refer back to these when I motivate my design decisions below.
 
 #### Implementation
 
+##### Stateful testing interface
+
+* Trait, type class, protocol type, module signatures
+
+##### Generating and shrinking
+##### Running and assertion checking
+
 #### Example: array-based queue
 
-Similar to the queue example from [*Testing the hard stuff and staying
+The queue example from [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014)
 
-* Taken from Nick's first
-  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
+##### SUT
 
-* Queue example
-  + regression tests
-  + negative tests
-  + proper coverage
+```c
+typedef struct queue {
+  int *buf;
+  int inp, outp, size;
+} Queue;
+
+Queue *new(int n) {
+  int *buff = malloc(n*sizeof(int));
+  Queue q = {buff,0,0,n};
+  Queue *qptr = malloc(sizeof(Queue));
+  *qptr = q;
+  return qptr;
+}
+
+void put(Queue *q, int n) {
+  q->buf[q->inp] = n;
+  q->inp = (q->inp + 1) % q->size;
+}
+
+int get(Queue *q) {
+  int ans = q->buf[q->outp];
+  q->outp = (q->outp + 1) % q->size;
+  return ans;
+}
+
+int size(Queue *q) {
+  return (q->inp - q->outp) % q->size;
+}
+```
+
+##### Model / fake
+
+```haskell
+type State = Map (Var Queue) FQueue
+
+data FQueue = FQueue
+  { fqElems :: [Int]
+  , fqSize  :: Int
+  }
+  deriving Show
+
+data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
+  deriving (Eq, Show)
+
+fnew :: Int -> State -> Return Err (State, Var Queue)
+fnew sz s =
+  let
+    v = Var (Map.size s)
+  in
+    return (Map.insert v (FQueue [] sz) s, v)
+
+fput :: Var Queue -> Int -> State -> Return Err (State, ())
+fput q i s
+  | q `Map.notMember` s = Precondition QueueDoesNotExist
+  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Precondition QueueIsFull
+  | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
+
+fget :: Var Queue -> State -> Return Err (State, Int)
+fget q s
+  | q `Map.notMember` s        = Precondition QueueDoesNotExist
+  | null (fqElems (s Map.! q)) = Precondition QueueIsEmpty
+  | otherwise = case fqElems (s Map.! q) of
+      [] -> error "fget: impossible, we checked that it's non-empty"
+      i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
+
+fsize :: Var Queue -> State -> Return Err (State, Int)
+fsize q s
+  | q `Map.notMember` s = Precondition QueueDoesNotExist
+  | otherwise           = return (s, length (fqElems (s Map.! q)))
+```
+
+##### Testing
+
+```haskell
+instance StateModel State where
+
+  initialState = Map.empty
+
+  type Reference State = Queue
+  type Failure State = Err
+
+  data Command State q
+    = New Int
+    | Put q Int
+    | Get q
+    | Size q
+    deriving (Show, Functor)
+
+  data Response State q
+    = New_ q
+    | Put_ ()
+    | Get_ Int
+    | Size_ Int
+    deriving (Eq, Show, Functor, Foldable)
+
+  generateCommand s
+    | Map.null s = New . getPositive <$> arbitrary
+    | otherwise  = oneof
+      [ New . getPositive <$> arbitrary
+      , Put  <$> arbitraryQueue <*> arbitrary
+      , Get  <$> arbitraryQueue
+      , Size <$> arbitraryQueue
+      ]
+    where
+      arbitraryQueue :: Gen (Var Queue)
+      arbitraryQueue = Var <$> choose (0, Map.size s - 1)
+
+  shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
+  shrinkCommand _s _cmd = []
+
+  runFake (New sz)  s = fmap New_  <$> fnew sz s
+  runFake (Put q i) s = fmap Put_  <$> fput q i s
+  runFake (Get q)   s = fmap Get_  <$> fget q s
+  runFake (Size q)  s = fmap Size_ <$> fsize q s
+
+  -- These are FFI bindings that call the C code.
+  runReal (New sz)  = New_  <$> new sz
+  runReal (Put q i) = Put_  <$> put q i
+  runReal (Get q)   = Get_  <$> get q
+  runReal (Size q)  = Size_ <$> size q
+
+  runCommandMonad _ = id
+
+prop_ok :: Commands State -> Property
+prop_ok cmds = monadicIO $ do
+  _ <- runCommands cmds
+  assert True
+```
+
++ regression tests?
 
 #### Example: process registry
 
 This example comes from the paper [*QuickCheck testing for fun and
 profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
-(2007).
+(2007) and is also part of John's Midlands Graduate School course (2019).
 
 #### Example: file system
 
++ proper coverage?
+
 #### Example: jug puzzle from Die Hard 3
 
+In the movie Die Hard 3 there's an
+[scene](https://www.youtube.com/watch?v=BVtQNK_ZUJg) where Bruce Willis and
+Samuel L. Jackson have to solve a puzzle in order to stop a bomb from going off.
+The puzzle is: given a 3L and a 5L jug, how can you measure exactly 4L?
+
+I first saw this example solved using TLA+ and I wanted to include it here
+because it shows that we don't necessarily need a real implementation, merely
+running the model/fake can be useful.
+
+The main idea is to model the two jugs and all actions we can do with them and
+then throw an exception when the big jug contains 4L. This will fail the test
+and output the shrunk sequence of actions that resulted in the failure, giving
+us the solution to the puzzle.
+
+```haskell
+data Model = Model
+  { bigJug   :: Int
+  , smallJug :: Int
+  }
+  deriving (Eq, Show)
+
+data BigJugIs4 = BigJugIs4
+  deriving (Eq, Show)
+
+instance StateModel Model where
+
+  initialState = Model 0 0
+
+  type Reference Model = Void
+  type Failure Model = BigJugIs4
+
+  data Command Model r
+    = FillBig
+    | FillSmall
+    | EmptyBig
+    | EmptySmall
+    | SmallIntoBig
+    | BigIntoSmall
+    deriving (Show, Enum, Bounded, Functor)
+
+  data Response Model r = Done
+    deriving (Eq, Show, Functor, Foldable)
+
+  generateCommand :: Model -> Gen (Command Model r)
+  generateCommand _s = elements [minBound ..]
+
+  runFake :: Command Model r -> Model -> Return (Failure Model) (Model, Response Model r)
+  runFake FillBig      s = done s { bigJug   = 5 }
+  runFake FillSmall    s = done s { smallJug = 3 }
+  runFake EmptyBig     s = done s { bigJug   = 0 }
+  runFake EmptySmall   s = done s { smallJug = 0 }
+  runFake SmallIntoBig (Model big small) =
+    let big' = min 5 (big + small) in
+    done (Model { bigJug = big'
+                , smallJug = small - (big' - big) })
+  runFake BigIntoSmall (Model big small) =
+    let small' = min 3 (big + small) in
+    done (Model { bigJug = big - (small' - small)
+                , smallJug = small'
+                })
+
+  runReal :: Concrete Model -> IO (Response Model (Reference Model))
+  runReal _cmd = return Done
+
+  monitoring :: (Model, Model) -> Concrete Model -> Response Model (Reference Model)
+             -> Property -> Property
+  monitoring (_s, s') _cmd _resp =
+    counterexample $ "\n    State: "++show s'++"\n"
+
+  runCommandMonad _s = id
+
+done :: Model -> Return (Failure Model) (Model, Response Model ref)
+done s' | bigJug s' == 4 = Throw BigJugIs4
+        | otherwise      = Ok (s', Done)
+
+prop_dieHard :: Commands Model -> Property
+prop_dieHard cmds = withMaxSuccess 10000 $ monadicIO $ do
+  _ <- runCommands cmds
+  assert True
+```
+
+When we run `quickcheck prop_dieHard` we get the shrunk counterexample,
+`Commands [FillBig,BigIntoSmall,EmptySmall,BigIntoSmall,FillBig,BigIntoSmall]`.
 
 ### Parallel property-based testing in ~300 LOC
+
+#### Motivation
+
+#### How it works
 
 #### Prior work
 
@@ -470,6 +730,11 @@ profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681
 
 #### Implementation
 
+##### Parallel program generation and shrinking
+
+##### Linearisability checking
+
+##### Parallel running
 
 #### Example: ticket dispenser
 
@@ -489,6 +754,10 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 * Vanilla property-based testing generates unit tests, what about stateful and
   parallel property-based testing?
 
+* Fake instead of state machine spec is not only easier for programmers
+  unfamilar with formal specification, it's also more useful in that the fake
+  can be used in integration tests with components that depend on the SUT
+
 * https://martinfowler.com/bliki/ContractTest.html
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 * [Integrated Tests Are A Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger
@@ -496,10 +765,10 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 
 ## Future work
 
-Having a compact code base makes it cheaper to make experimental changes.
-
 * Translate code to other programming language paradigms, thus making it easier
   for library implementors
+
+* Having a compact code base makes it cheaper to make experimental changes.
 
 * Can we use
   [`MonadAsync`](https://hackage.haskell.org/package/io-classes-1.4.1.0/docs/Control-Monad-Class-MonadAsync.html)
