@@ -22,6 +22,7 @@ instance StateModel State where
   initialState = Map.empty
 
   type Reference State = Queue
+
   type Failure State = Err
 
   data Command State q

@@ -28,11 +28,10 @@ class ( Monad (CommandMonad state)
       , Functor (Response state)
       , Foldable (Response state)
       , Eq (Response state (Reference state))
-      , Show (Response state (Reference state))
-      , Eq (Failure state)
       , Show (Command state (Var (Reference state)))
+      , Show (Response state (Reference state))
+      , Show (Response state (Var (Reference state)))
       , Show (Reference state)
-      , Show (Failure state)
       , Typeable (Reference state)
       , Typeable state
       ) => StateModel state where
@@ -48,7 +47,6 @@ class ( Monad (CommandMonad state)
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
 
-
   generateCommand :: state -> Gen (Symbolic state)
 
   shrinkCommand :: state -> Symbolic state -> [Symbolic state]
@@ -57,7 +55,7 @@ class ( Monad (CommandMonad state)
   initialState :: state
 
   runFake :: Symbolic state -> state
-          -> Return (Failure state) (state, Response state (Var (Reference state)))
+          -> Either (Failure state) (state, Response state (Var (Reference state)))
 
   runReal :: Concrete state -> CommandMonad state (Response state (Reference state))
 
@@ -69,34 +67,19 @@ class ( Monad (CommandMonad state)
               => Command state ref -> String
   commandName = head . words . show
 
-  abstractFailure :: state -> SomeException -> Maybe (Failure state)
-  abstractFailure _s _err = Nothing
-
   runCommandMonad :: state -> CommandMonad state a -> IO a
 
 ------------------------------------------------------------------------
 
--- By distinguishing between precondition failures and throws we can generate
--- negative tests (that are supposed to throw).
-data Return e a
-  = Precondition e
-  | Throw e
-  | Ok a
-  deriving Show
-
-instance Functor (Return e) where
-  fmap _f (Precondition e) = Precondition e
-  fmap _f (Throw e)        = Throw e
-  fmap  f (Ok x)           = Ok (f x)
-
-instance Applicative (Return e) where
-  pure = Ok
-  mf <*> mx = undefined
-
-instance Monad (Return e) where
-  Precondition e >>= _k = Precondition e
-  Throw e        >>= _k = Throw e
-  Ok x           >>=  k = k x
+-- XXX:
+{-
+data FakeMonad state a
+  = Return a
+  | Assert String Bool (FakeMonad state a)
+  | Precondtion String (state -> Bool) (FakeMonad state a)
+  | Sometimes
+  | Put state
+  -}
 
 -- XXX: Can be removed when StateModel.hs is removed?
 type Env state = Var (Reference state) -> Reference state
@@ -113,15 +96,13 @@ deriving instance Show (Symbolic state) => Show (Commands state)
 
 precondition :: StateModel state => state -> Symbolic state -> Bool
 precondition s cmd = case runFake cmd s of
-  Precondition _ -> False
-  Ok _ -> True
-  Throw _ -> True
+  Left _  -> False
+  Right _ -> True
 
 nextState :: StateModel state => state -> Symbolic state -> state
 nextState s cmd = case runFake cmd s of
-  Ok (s', _) -> s'
-  Precondition _err -> error "nextState: impossible, we checked for success in precondition"
-  Throw _err -> s
+  Right (s', _) -> s'
+  Left _err -> error "nextState: impossible, we checked for success in precondition"
 
 instance StateModel state => Arbitrary (Commands state) where
   arbitrary = Commands <$> genCommands initialState
@@ -165,72 +146,53 @@ prune = go initialState
 
 -- * Running
 
-newtype History state = History [Event state]
-
-data Event state
-  = Success (Concrete state) (Response state (Reference state))
-  | Failure (Concrete state) (Failure state)
-
 runCommands :: forall state. StateModel state
-            => Commands state -> PropertyM (CommandMonad state) (History state)
-runCommands (Commands cmds0) = History <$> go initialState 0 [] [] cmds0
+            => Commands state -> PropertyM (CommandMonad state) ()
+runCommands (Commands cmds0) = go initialState 0 [] cmds0
   where
-    go :: state -> Int -> [(Int, Dynamic)] -> [Event state]
-       -> [Symbolic state]
-       -> PropertyM (CommandMonad state) [Event state]
-    go _state _i _vars events [] = return (reverse events)
-    go  state  i  vars events (cmd : cmds) = do
+    go :: state -> Int -> [(Int, Dynamic)] -> [Symbolic state]
+       -> PropertyM (CommandMonad state) ()
+    go _state _i _vars [] = return ()
+    go  state  i  vars (cmd : cmds) = do
       pre (precondition state cmd)
       let name = commandName cmd
-          cmd' = fmap (sub vars) cmd
+          ccmd = fmap (sub vars) cmd
       monitor (tabulate "Commands" [name] . classify True name)
-      eResp <- run (try (runReal cmd'))
-      monitor (counterexample (show cmd ++ " --> " ++ show eResp))
-      let eResp' = runFake cmd state
-      case (eResp, eResp') of
-        (Left err, Throw err') -> do
-          monitor (counterexample "err")
-          assert (abstractFailure state err == Just err')
-          go state i vars (Failure cmd' err' : events) cmds
-        (Right resp, Ok (state', resp')) -> do
-          monitor (monitoring (state, state') cmd' resp)
-          -- The response might contain new references, e.g. `Spawn` returns a
-          -- `ThreadId`, these need to be added to the environment, but a
-          -- response can also contain referenses that shouldn't be added to the
-          -- environment, e.g. `WhereIs` also returns a `ThreadId`. The design
-          -- choice I went for here is to check if the returned references are
-          -- disjoint from the environment, if so we assume it's a spawn-like
-          -- operation, while if they intersect we assume a whereis-like
-          -- operation.
+      cresp <- run (runReal ccmd)
+      let Right (state', resp') = runFake cmd state
+      monitor (counterexample (show cmd ++ " --> " ++ show cresp))
+      monitor (monitoring (state, state') ccmd cresp)
+      -- The response might contain new references, e.g. `Spawn` returns a
+      -- `ThreadId`, these need to be added to the environment, but a
+      -- response can also contain referenses that shouldn't be added to the
+      -- environment, e.g. `WhereIs` also returns a `ThreadId`. The design
+      -- choice I went for here is to check if the returned references are
+      -- disjoint from the environment, if so we assume it's a spawn-like
+      -- operation, while if they intersect we assume a whereis-like
+      -- operation.
 
-          -- Another option might be to make a `newtype Unfoldable a =
-          -- Unfoldable a` whose `Foldable` instance has a `toList` that returns
-          -- the the empty list. That way we can wrap the `ThreadId` of
-          -- `WhereIs` in `Unfoldable` and always add all references that the
-          -- response returns to the environment.
+      -- Another option might be to make a `newtype Unfoldable a =
+      -- Unfoldable a` whose `Foldable` instance has a `toList` that returns
+      -- the the empty list. That way we can wrap the `ThreadId` of
+      -- `WhereIs` in `Unfoldable` and always add all references that the
+      -- response returns to the environment.
 
-          -- XXX: This can be improved...
-          --   1. new refs always +1 of length vars (there can be more than one new ref)
-          --   2. ops that return a new ref and old refs can't be handled here
-          let refs | toList resp' `disjoint` map (Var . fst) vars = toList resp
-                   | otherwise = []
-              vars' | null refs = vars
-                    | otherwise = vars ++ zip [i..] (map toDyn refs)
-          when (resp /= fmap (sub vars') resp') $
-            monitor (counterexample ("\nExpected: " ++ show (fmap (sub vars') resp') ++ "\nGot: " ++ show resp))
-          assert (resp == fmap (sub vars') resp')
-          go state' (i + length refs) vars' (Success cmd' resp : events) cmds
-        (Left _, Ok (_state', _resp)) -> do
-          monitor (counterexample "Bla")
-          assert False
-          return (reverse events)
-        (Right resp, Throw err) -> do
-          let state' = nextState state cmd
-          -- XXX: Why doesn't this that bigJug = 4 in the DieHard example?
-          monitor (counterexample ("Got: " ++ show resp ++ "\nExpected: " ++ show err))
-          monitor (monitoring (state, state') cmd' resp)
-          assert False
-          return (reverse events)
+      -- Yet another option would be to introduce a new type class
+      -- `ReturnsReferences` and ask the user to manually implement it.
+
+      -- XXX: This can be improved...
+      --   1. new refs always +1 of length vars (there can be more than one new ref)
+      --   2. ops that return a new ref and old refs can't be handled here
+      let refs | toList resp' `disjoint` map (Var . fst) vars = toList cresp
+               | otherwise = []
+          vars' | null refs = vars
+                | otherwise = vars ++ zip [i..] (map toDyn refs)
+          cresp' = fmap (sub vars') resp'
+      let ok = cresp == cresp'
+      unless ok $
+        monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
+      assert ok
+      go state' (i + length refs) vars' cmds
 
 disjoint :: Eq a => [a] -> [a] -> Bool
 disjoint xs ys = all (`notElem` ys) xs

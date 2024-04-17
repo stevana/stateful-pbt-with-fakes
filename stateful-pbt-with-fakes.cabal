@@ -21,7 +21,7 @@ common warnings
 library
   import:           warnings
   exposed-modules:
-    DieHard
+    Example.DieHard
     FileSystem
     FileSystem.Fake
     FileSystem.Interface
@@ -54,12 +54,14 @@ library
   install-includes: cbits/queue.h
   default-language: Haskell2010
 
-test-suite stateful-pbt-with-fakes-test
+test-suite test
   import:           warnings
   default-language: Haskell2010
   type:             exitcode-stdio-1.0
   hs-source-dirs:   test
   main-is:          Main.hs
   build-depends:
-    , base                     ^>=4.17.0.0
+    , base
     , stateful-pbt-with-fakes
+    , tasty
+    , tasty-quickcheck

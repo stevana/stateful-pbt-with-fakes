@@ -4,7 +4,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module DieHard where
+module Example.DieHard where
 
 import Data.Void
 import Test.QuickCheck
@@ -20,15 +20,11 @@ data Model = Model
   }
   deriving (Eq, Show)
 
-data BigJugIs4 = BigJugIs4
-  deriving (Eq, Show)
-
 instance StateModel Model where
 
   initialState = Model 0 0
 
   type Reference Model = Void
-  type Failure Model = BigJugIs4
 
   data Command Model r
     = FillBig
@@ -39,13 +35,13 @@ instance StateModel Model where
     | BigIntoSmall
     deriving (Show, Enum, Bounded, Functor)
 
-  data Response Model r = Done
+  data Response Model r = Done | BigJugIs4
     deriving (Eq, Show, Functor, Foldable)
 
   generateCommand :: Model -> Gen (Command Model r)
   generateCommand _s = elements [minBound ..]
 
-  runFake :: Command Model r -> Model -> Return (Failure Model) (Model, Response Model r)
+  runFake :: Command Model r -> Model -> Either void (Model, Response Model r)
   runFake FillBig      s = done s { bigJug   = 5 }
   runFake FillSmall    s = done s { smallJug = 3 }
   runFake EmptyBig     s = done s { bigJug   = 0 }
@@ -70,11 +66,11 @@ instance StateModel Model where
 
   runCommandMonad _s = id
 
-done :: Model -> Return (Failure Model) (Model, Response Model ref)
-done s' | bigJug s' == 4 = Throw BigJugIs4
-        | otherwise      = Ok (s', Done)
+done :: Model -> Either void (Model, Response Model ref)
+done s' | bigJug s' == 4 = return (s', BigJugIs4)
+        | otherwise      = return (s', Done)
 
 prop_dieHard :: Commands Model -> Property
 prop_dieHard cmds = withMaxSuccess 10000 $ monadicIO $ do
-  _ <- runCommands cmds
+  runCommands cmds
   assert True

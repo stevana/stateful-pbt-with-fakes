@@ -4,7 +4,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 
 import Queue.Real (Queue)
-import Stateful (Return(..), Var(..))
+import Stateful (Var(..))
 
 ------------------------------------------------------------------------
 
@@ -21,28 +21,28 @@ data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
 
 ------------------------------------------------------------------------
 
-fnew :: Int -> State -> Return Err (State, Var Queue)
+fnew :: Int -> State -> Either Err (State, Var Queue)
 fnew sz s =
   let
     v = Var (Map.size s)
   in
     return (Map.insert v (FQueue [] sz) s, v)
 
-fput :: Var Queue -> Int -> State -> Return Err (State, ())
+fput :: Var Queue -> Int -> State -> Either Err (State, ())
 fput q i s
-  | q `Map.notMember` s = Precondition QueueDoesNotExist
-  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Precondition QueueIsFull
+  | q `Map.notMember` s = Left QueueDoesNotExist
+  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Left QueueIsFull
   | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
 
-fget :: Var Queue -> State -> Return Err (State, Int)
+fget :: Var Queue -> State -> Either Err (State, Int)
 fget q s
-  | q `Map.notMember` s        = Precondition QueueDoesNotExist
-  | null (fqElems (s Map.! q)) = Precondition QueueIsEmpty
+  | q `Map.notMember` s        = Left QueueDoesNotExist
+  | null (fqElems (s Map.! q)) = Left QueueIsEmpty
   | otherwise = case fqElems (s Map.! q) of
       [] -> error "fget: impossible, we checked that it's non-empty"
       i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
 
-fsize :: Var Queue -> State -> Return Err (State, Int)
+fsize :: Var Queue -> State -> Either Err (State, Int)
 fsize q s
-  | q `Map.notMember` s = Precondition QueueDoesNotExist
+  | q `Map.notMember` s = Left QueueDoesNotExist
   | otherwise           = return (s, length (fqElems (s Map.! q)))
