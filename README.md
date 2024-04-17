@@ -465,7 +465,7 @@ also inspried by:
   2. John's Midlands Graduate School
   [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
 
-* 3. Edsko de Vries' "lockstep"
+  3. Edsko de Vries' "lockstep"
   [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
 
 I'll refer back to these when I motivate my design decisions below.
@@ -610,8 +610,8 @@ instance StateModel State where
 
   runCommandMonad _ = id
 
-prop_ok :: Commands State -> Property
-prop_ok cmds = monadicIO $ do
+prop_queue :: Commands State -> Property
+prop_queue cmds = monadicIO $ do
   _ <- runCommands cmds
   assert True
 ```
