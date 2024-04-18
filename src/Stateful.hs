@@ -14,6 +14,7 @@ import Data.Dynamic
 import Data.Foldable
 import Data.Kind
 import Data.Void
+import Control.Monad.IO.Class
 import Test.QuickCheck hiding (Failure, Success)
 import Test.QuickCheck.Monadic
 
@@ -23,6 +24,7 @@ type Symbolic state = Command state (Var (Reference state))
 type Concrete state = Command state (Reference state)
 
 class ( Monad (CommandMonad state)
+      , MonadIO (CommandMonad state)
       , MonadCatch (CommandMonad state)
       , Functor (Command state)
       , Functor (Response state)
@@ -67,7 +69,7 @@ class ( Monad (CommandMonad state)
               => Command state ref -> String
   commandName = head . words . show
 
-  runCommandMonad :: state -> CommandMonad state a -> IO a
+  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 
 ------------------------------------------------------------------------
 
@@ -186,13 +188,13 @@ runCommands (Commands cmds0) = go initialState 0 [] cmds0
           assert ok
           go state' (i + length refs) vars' cmds
 
-    disjoint :: Eq a => [a] -> [a] -> Bool
-    disjoint xs ys = all (`notElem` ys) xs
+disjoint :: Eq a => [a] -> [a] -> Bool
+disjoint xs ys = all (`notElem` ys) xs
 
 sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
 sub vars (Var x) =
   case lookup x vars of
-    Nothing -> discard
+    Nothing -> error $ "discard: vars = " ++ show vars ++ ", var = " ++ show x -- discard
       -- ^ this can happen if a shrink step makes a variable unbound
     Just var_ ->
       case fromDynamic var_ of

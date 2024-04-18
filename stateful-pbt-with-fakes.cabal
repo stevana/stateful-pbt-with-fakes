@@ -22,11 +22,13 @@ library
   import:           warnings
   exposed-modules:
     Example.DieHard
+    Example.TicketDispenser
     FileSystem
     FileSystem.Fake
     FileSystem.Interface
     FileSystem.Test
     Parallel
+    Parallel2
     Queue.Fake
     Queue.Real
     Queue.Test
@@ -35,7 +37,6 @@ library
     Registry.Test
     Stateful
     StateModel
-    TicketDispenser
 
   build-depends:
     , array

@@ -700,15 +700,11 @@ data Model = Model
   }
   deriving (Eq, Show)
 
-data BigJugIs4 = BigJugIs4
-  deriving (Eq, Show)
-
 instance StateModel Model where
 
   initialState = Model 0 0
 
   type Reference Model = Void
-  type Failure Model = BigJugIs4
 
   data Command Model r
     = FillBig
@@ -719,13 +715,13 @@ instance StateModel Model where
     | BigIntoSmall
     deriving (Show, Enum, Bounded, Functor)
 
-  data Response Model r = Done
+  data Response Model r = Done | BigJugIs4
     deriving (Eq, Show, Functor, Foldable)
 
   generateCommand :: Model -> Gen (Command Model r)
   generateCommand _s = elements [minBound ..]
 
-  runFake :: Command Model r -> Model -> Return (Failure Model) (Model, Response Model r)
+  runFake :: Command Model r -> Model -> Either void (Model, Response Model r)
   runFake FillBig      s = done s { bigJug   = 5 }
   runFake FillSmall    s = done s { smallJug = 3 }
   runFake EmptyBig     s = done s { bigJug   = 0 }
@@ -746,22 +742,52 @@ instance StateModel Model where
   monitoring :: (Model, Model) -> Concrete Model -> Response Model (Reference Model)
              -> Property -> Property
   monitoring (_s, s') _cmd _resp =
-    counterexample $ "\n    State: "++show s'++"\n"
+    counterexample $ "\n    State: " ++ show s' ++ "\n"
 
   runCommandMonad _s = id
 
-done :: Model -> Return (Failure Model) (Model, Response Model ref)
-done s' | bigJug s' == 4 = Throw BigJugIs4
-        | otherwise      = Ok (s', Done)
+done :: Model -> Either void (Model, Response Model ref)
+done s' | bigJug s' == 4 = return (s', BigJugIs4)
+        | otherwise      = return (s', Done)
 
 prop_dieHard :: Commands Model -> Property
 prop_dieHard cmds = withMaxSuccess 10000 $ monadicIO $ do
-  _ <- runCommands cmds
+  runCommands cmds
   assert True
 ```
 
-When we run `quickcheck prop_dieHard` we get the shrunk counterexample,
-`Commands [FillBig,BigIntoSmall,EmptySmall,BigIntoSmall,FillBig,BigIntoSmall]`.
+When we run `quickcheck prop_dieHard` we get the following output:
+
+```
+   +++ OK, failed as expected. Assertion failed (after 199 tests and 11 shrinks):
+    Commands [FillBig,BigIntoSmall,EmptySmall,BigIntoSmall,FillBig,BigIntoSmall]
+    FillBig --> Done
+
+        State: Model {bigJug = 5, smallJug = 0}
+
+    BigIntoSmall --> Done
+
+        State: Model {bigJug = 2, smallJug = 3}
+
+    EmptySmall --> Done
+
+        State: Model {bigJug = 2, smallJug = 0}
+
+    BigIntoSmall --> Done
+
+        State: Model {bigJug = 0, smallJug = 2}
+
+    FillBig --> Done
+
+        State: Model {bigJug = 5, smallJug = 2}
+
+    BigIntoSmall --> Done
+
+        State: Model {bigJug = 4, smallJug = 3}
+
+    Expected: BigJugIs4
+    Got: Done
+```
 
 ### Parallel property-based testing in ~300 LOC
 

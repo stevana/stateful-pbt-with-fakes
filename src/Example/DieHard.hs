@@ -62,7 +62,7 @@ instance StateModel Model where
   monitoring :: (Model, Model) -> Concrete Model -> Response Model (Reference Model)
              -> Property -> Property
   monitoring (_s, s') _cmd _resp =
-    counterexample $ "\n    State: "++show s'++"\n"
+    counterexample $ "\n    State: " ++ show s' ++ "\n"
 
   runCommandMonad _s = id
 
