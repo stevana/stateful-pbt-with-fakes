@@ -62,8 +62,7 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
 pruneParallel :: StateModel state
-              => [[Untyped (Command state)]]
-              -> [[Untyped (Command state)]]
+              => [[Untyped (Command state)]] -> [[Untyped (Command state)]]
 pruneParallel = go initialState
   where
     go _s [] = []

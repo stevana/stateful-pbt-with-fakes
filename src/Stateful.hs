@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -70,7 +71,6 @@ class ( Monad (CommandMonad state)
 
 ------------------------------------------------------------------------
 
-
 -- XXX: Can be removed when StateModel.hs is removed?
 type Env state = Var (Reference state) -> Reference state
 
@@ -95,6 +95,8 @@ nextState s cmd = case runFake cmd s of
   Left _err -> error "nextState: impossible, we checked for success in precondition"
 
 instance StateModel state => Arbitrary (Commands state) where
+
+  arbitrary :: Gen (Commands state)
   arbitrary = Commands <$> genCommands initialState
     where
       genCommands :: StateModel state
@@ -111,6 +113,7 @@ instance StateModel state => Arbitrary (Commands state) where
                        Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
             ]
 
+  shrink :: Commands state -> [Commands state]
   shrink (Commands cmds) =
     map (Commands . prune . map fst) (shrinkList shrinker (withStates cmds))
     where

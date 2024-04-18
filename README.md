@@ -385,11 +385,11 @@ Before we get started with stateful testing, let's first recap what vanilla
 
 The original idea is that we can test some pure (or side-effect free) function
 $f : A \to B$ by randomly generating its argument ($A$) and then checking that
-some predicate ($P : B \to Bool$) on the output holds.
+some relation, $R : A \to B \to Bool$, between the input and output holds.
 
 For example let's say that the function we want to test is a list reversal
 function ($reverse$), then the argument we need to randomly generate is a list,
-and the predicate can be anything we'd like to hold for our list reversal
+and the relation can be anything we'd like to hold for our list reversal
 function, for example we can specify that reversing the result of rerversal
 gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
 
@@ -427,24 +427,63 @@ XXX: https://fsharpforfunandprofit.com/posts/property-based-testing-2/
 Having recalled how vanilla property-based testing works, let's now build a
 module on top which allows us to do stateful testing.
 
+Before we do so, I'll give some reasons why developing such a module make sense,
+how it works at a high-level and what my sources of inspiration are.
+
 #### Motivation
 
-XXX: why is stateful testing needed?
+In order to explain why stateful property-based testing is needed, it's perhaps
+helpful to have a look at how it's different from vanilla property-based testing.
 
-Before we do so, a word or two about why we need such a module in the first
-place is in order.
+A pure, or side-effect free, function always returns the same output if given
+the same input. This isn't true for a stateful function or component.
 
-It's certainly possible to test stateful systems using vanilla property-based
-testing, however parallel testing build upon stateful testing...
+For example, one of the simplest stateful components we can build is a counter.
+If we think of the counter as a black box and our input is "increment the
+counter" and the output is the new value, then repeating the same input will not
+give the same output (assuming "increment the counter" is implemented using
+$+1$).
+
+So one difference is that we need to account for the state of the counter, or
+the history of all inputs, while testing.
+
+Another difference is that stateful systems often create some sort of reference
+or handle, which allows the user to operate on some resource. For example when
+working with a POSIX-like filesystem we open, operate on and finally close file
+handles. Or some HTTP API might return a UUID to represent some page and
+subsequent changes via API calls to that page need to include that UUID, etc.
+
+So while it's certainly possible to test stateful systems using vanilla
+property-based testing, it's convenient to have a library take care of modelling
+the state and dealing with references.
+
+Furthermore, parallel testing builds upon the stateful testing interface without
+requiring the user to do any extra work, but more on this later.
 
 #### How it works
 
-XXX: how does stateful testing work at a high-level?
+The high-level idea behind stateful property-based testing is that first we
+create some kind of in-memory model of the system we want to test.
+
+For example in the case of the counter the model is just an integer, while in
+the case of the filesystem a simplified model is a tree with filepaths as node
+labels and children either being other trees (directories) or leaves of bytes
+(files).
+
+Once we have our model we generate sequences of inputs, where inputs are actions
+the user can take, e.g. increment in the case of a counter or
+open/read/write/close in the case of filesystem.
+
+The generated sequence of inputs is then executed against the real component as
+well as the model of it, and then the outputs are compared to check that the
+real component is faithful to the model. If it isn't we shrink the sequence of
+inputs to try to present the minimal counterexample, as in the stateless case.
 
 #### Prior work
 
 I'd like to explain where my inspiration is coming from, because I think it's
-important to note that the code I'm about to present didn't come from thin air.
+important to note that the code I'm about to present didn't come from thin air
+(even though it might look simple).
 
 I've been thinking about this problem since the end of 2016 as can be witnesed
 by my involvement in the following
@@ -472,12 +511,22 @@ I'll refer back to these when I motivate my design decisions below.
 
 #### Implementation
 
+There are three parts to the implementation. First the stateful testing
+interface (or type class), this is what the user needs to implement, the rest of
+the library is programmed against this interface and provides the testing
+functionality. The second part is generating and shrinking sequences of inputs,
+which is derived from the interfaces ability to generate and shrink individual
+inputs. The third and final part is about executing the generated inputs against
+the real component and the model as well as checking that they conform.
+
 ##### Stateful testing interface
 
 * Trait, type class, protocol type, module signatures
 
 ##### Generating and shrinking
 ##### Running and assertion checking
+
+#### Example: counter
 
 #### Example: array-based queue
 

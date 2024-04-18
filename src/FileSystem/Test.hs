@@ -119,8 +119,8 @@ assoc (Left e, _s) = Left e
 assoc (Right x, s) = Right (State s, x)
 
 
-prop_ok :: Commands State -> Property
-prop_ok cmds = monadicIO $ do
+prop_fileSystem :: Commands State -> Property
+prop_fileSystem cmds = monadicIO $ do
   run cleanup
   _ <- runCommands cmds
   assert True
