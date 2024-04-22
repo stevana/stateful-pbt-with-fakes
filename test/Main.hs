@@ -3,10 +3,10 @@ module Main (main) where
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
-import Queue.Test
+import Example.Queue.Test
 import Example.DieHard
 import Example.TicketDispenser
-import Registry.Test
+import Example.Registry.Test
 
 ------------------------------------------------------------------------
 
@@ -19,5 +19,5 @@ tests = testGroup "Tests"
   , testProperty "DieHard" (expectFailure prop_dieHard)
   , testProperty "Registry" prop_registry
   , testProperty "TicketDispenserSeq" prop_ticketDispenserSeq
-  , testProperty "TicketDispenserPar" prop_ticketDispenserPar
+  , testProperty "TicketDispenserPar" (expectFailure prop_ticketDispenserPar)
   ]

@@ -5,7 +5,7 @@
 -- THIS CODE!!! The exercise is one in black box testing.
 
 
-module Registry.RealBuggy where
+module Example.Registry.RealBuggy where
 
 import Data.IORef
 import Control.Monad

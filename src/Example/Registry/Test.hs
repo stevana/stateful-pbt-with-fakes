@@ -5,7 +5,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Registry.Test where
+module Example.Registry.Test where
 
 import Control.Concurrent
 import Control.Exception (ErrorCall(..), try)
@@ -13,7 +13,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic
 import Control.Arrow
 
-import Registry.Real
+import Example.Registry.Real
 import Stateful
 
 ------------------------------------------------------------------------
@@ -40,7 +40,7 @@ instance StateModel RegState where
 
   data Response RegState tid
     = Spawn' tid
-    | WhereIs' (Maybe tid)
+    | WhereIs' (NonFoldable (Maybe tid))
     | Register' (Either ErrorCall ())
     | Unregister' ()
     deriving (Eq, Show, Functor, Foldable)
@@ -58,7 +58,7 @@ instance StateModel RegState where
   runFake :: Symbolic RegState -> RegState -> Either () (RegState, Response RegState (Var (Reference RegState)))
   runFake Spawn               s = let tid = Var (length (tids s)) in
                                   return (s { tids = tids s ++ [tid] }, Spawn' tid)
-  runFake (WhereIs name)      s = return (s, WhereIs' (lookup name (regs s)))
+  runFake (WhereIs name)      s = return (s, WhereIs' (NonFoldable (lookup name (regs s))))
   runFake (Register name tid) s
     | tid `elem` tids s && name `notElem` map fst (regs s) && tid `notElem` map snd (regs s) =
        return (s { regs = (name, tid) : regs s }, Register' (Right ()))
@@ -76,7 +76,7 @@ instance StateModel RegState where
 
   runReal :: Concrete RegState -> IO (Response RegState (Reference RegState))
   runReal Spawn               = Spawn'    <$> forkIO (threadDelay 10000000)
-  runReal (WhereIs name)      = WhereIs'  <$> whereis name
+  runReal (WhereIs name)      = WhereIs' . NonFoldable <$> whereis name
   runReal (Register name tid) = Register' <$> fmap (left abstractError) (try (register name tid))
     where
       -- Throws away the location information from the error, so that it matches

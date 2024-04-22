@@ -6,14 +6,14 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Queue.Test where
+module Example.Queue.Test where
 
 import qualified Data.Map as Map
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
-import Queue.Real
-import Queue.Fake
+import Example.Queue.Real
+import Example.Queue.Fake
 import Stateful
 
 ------------------------------------------------------------------------

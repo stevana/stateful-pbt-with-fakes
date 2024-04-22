@@ -22,6 +22,12 @@ library
   import:           warnings
   exposed-modules:
     Example.DieHard
+    Example.Queue.Fake
+    Example.Queue.Real
+    Example.Queue.Test
+    Example.Registry.Real
+    Example.Registry.RealBuggy
+    Example.Registry.Test
     Example.TicketDispenser
     FileSystem
     FileSystem.Fake
@@ -29,12 +35,6 @@ library
     FileSystem.Test
     Parallel
     Parallel2
-    Queue.Fake
-    Queue.Real
-    Queue.Test
-    Registry.Real
-    Registry.RealBuggy
-    Registry.Test
     Stateful
     StateModel
 

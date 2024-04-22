@@ -79,6 +79,12 @@ type Env state = Var (Reference state) -> Reference state
 data Var a = Var Int
   deriving (Show, Eq, Ord)
 
+newtype NonFoldable a = NonFoldable a
+  deriving (Eq, Show, Functor)
+
+instance Foldable NonFoldable where
+  foldMap _f (NonFoldable _x) = mempty
+
 ------------------------------------------------------------------------
 
 -- * Generating and shrinking
@@ -139,35 +145,26 @@ prune = go initialState
 
 -- * Running
 
--- The response might contain new references, e.g. `Spawn` returns a
--- `ThreadId`, these need to be added to the environment, but a
--- response can also contain referenses that shouldn't be added to the
--- environment, e.g. `WhereIs` also returns a `ThreadId`. The design
--- choice I went for here is to check if the returned references are
--- disjoint from the environment, if so we assume it's a spawn-like
--- operation, while if they intersect we assume a whereis-like
--- operation.
-
--- Another option might be to make a `newtype Unfoldable a =
--- Unfoldable a` whose `Foldable` instance has a `toList` that returns
--- the the empty list. That way we can wrap the `ThreadId` of
--- `WhereIs` in `Unfoldable` and always add all references that the
--- response returns to the environment.
-
--- Yet another option would be to introduce a new type class
--- `ReturnsReferences` and ask the user to manually implement it.
-
--- XXX: This can be improved...
---   1. new refs always +1 of length vars (there can be more than one new ref)
---   2. ops that return a new ref and old refs can't be handled here
+-- The response might contain new references, e.g. `Spawn` returns a `ThreadId`,
+-- these need to be added to the environment, but a response can also contain
+-- referenses that shouldn't be added to the environment, e.g. `WhereIs` also
+-- returns a `ThreadId`.
+--
+-- The design I went with here is to add a `newtype Unfoldable a = Unfoldable a`
+-- whose `Foldable` instance has a `toList` that returns the the empty list.
+-- That way we can wrap the `ThreadId` of `WhereIs` in `Unfoldable` and always
+-- add all references that the response returns to the environment.
+--
+-- Another option would be to introduce a new type class `ReturnsReferences` and
+-- ask the user to manually implement it.
 runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
-runCommands (Commands cmds0) = go initialState 0 [] cmds0
+runCommands (Commands cmds0) = go initialState [] cmds0
   where
-    go :: state -> Int -> [(Int, Dynamic)] -> [Symbolic state]
+    go :: state -> [(Int, Dynamic)] -> [Symbolic state]
        -> PropertyM (CommandMonad state) ()
-    go _state _i _vars [] = return ()
-    go  state  i  vars (cmd : cmds) = do
+    go _state _vars [] = return ()
+    go  state  vars (cmd : cmds) = do
       case runFake cmd state of
         Left _err -> pre False
         Right (state', resp) -> do
@@ -177,19 +174,14 @@ runCommands (Commands cmds0) = go initialState 0 [] cmds0
           cresp <- run (runReal ccmd)
           monitor (counterexample (show cmd ++ " --> " ++ show cresp))
           monitor (monitoring (state, state') ccmd cresp)
-          let refs | toList resp `disjoint` map (Var . fst) vars = toList cresp
-                   | otherwise = []
-              vars' | null refs = vars
-                    | otherwise = vars ++ zip [i..] (map toDyn refs)
+          let refs   = toList cresp
+              vars'  = vars ++ zip [length vars..] (map toDyn refs)
               cresp' = fmap (sub vars') resp
-          let ok = cresp == cresp'
+              ok     = cresp == cresp'
           unless ok $
             monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
           assert ok
-          go state' (i + length refs) vars' cmds
-
-disjoint :: Eq a => [a] -> [a] -> Bool
-disjoint xs ys = all (`notElem` ys) xs
+          go state' vars' cmds
 
 sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
 sub vars (Var x) =

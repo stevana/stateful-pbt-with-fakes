@@ -1,6 +1,6 @@
 {-# LANGUAGE CApiFFI #-}
 
-module Queue.Real where
+module Example.Queue.Real where
 
 import Foreign
 import Foreign.C.Types

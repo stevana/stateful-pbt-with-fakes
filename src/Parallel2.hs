@@ -1,7 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,11 +13,12 @@ module Parallel2 where
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Exception (SomeException, try, displayException)
 import Control.Monad.IO.Class
 import Data.Dynamic
-import Data.Proxy
 import Data.Foldable
 import Data.List
+import Data.Proxy
 import Data.Tree
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
@@ -159,10 +160,11 @@ linearisable vars = any' (go initialState)
 ------------------------------------------------------------------------
 
 runParallelCommands :: forall state. StateModel state
-                => Show (Command state (Reference state)) -- XXX: remove
                     => ParallelCommands state -> PropertyM (CommandMonad state) ()
 runParallelCommands (ParallelCommands cmdss0) = do
-  mapM_ (\cmd -> let name = commandName cmd in monitor (tabulate "Commands" [name] . classify True name)) (concat cmdss0)
+  forM_ (concat cmdss0) $ \cmd ->
+    let name = commandName cmd in
+      monitor (tabulate "Commands" [name] . classify True name)
   monitor (tabulate "Number of concurrent commands" (map (show . length) cmdss0))
   evs <- liftIO newTQueueIO :: PropertyM (CommandMonad state) (TQueue (Event state))
   vars <- go evs [] cmdss0
@@ -172,26 +174,21 @@ runParallelCommands (ParallelCommands cmdss0) = do
   where
     go _evs vars [] = return vars
     go evs vars (cmds : cmdss) = do
-      refss <- liftIO $ mapConcurrently (\cmd -> runParallelReal evs (sub vars) cmd) cmds
-
-      --    let refs | toList resp `disjoint` map (Var . fst) vars = toList cresp
-      --             | otherwise = []
-      --        vars' | null refs = vars
-      --              | otherwise = vars ++ zip [i..] (map toDyn refs)
-      --    in
+      refss <- liftIO $
+        mapConcurrently (\cmd -> runParallelReal evs (sub vars) cmd) cmds
       let vars' = vars ++ zip [length vars..] (map toDyn (concat refss))
       go evs vars' cmdss
 
 runParallelReal :: forall state. StateModel state
-                => Show (Command state (Reference state)) -- XXX: remove
                 => TQueue (Event state) -> Env state
                 -> Command state (Var (Reference state))
                 -> IO [Reference state]
 runParallelReal evs env cmd = do
   pid <- toPid <$> liftIO myThreadId
-  let ccmd = fmap env cmd
   liftIO (atomically (writeTQueue evs (Invoke pid cmd)))
-  -- XXX: try/bracket
-  resp <- runCommandMonad (Proxy :: Proxy state) (runReal ccmd)
-  liftIO (atomically (writeTQueue evs (Ok pid resp)))
-  return (toList resp)
+  eResp <- try (runCommandMonad (Proxy :: Proxy state) (runReal (fmap env cmd)))
+  case eResp of
+    Left (err :: SomeException) -> error (displayException err)
+    Right resp -> do
+      liftIO (atomically (writeTQueue evs (Ok pid resp)))
+      return (toList resp)

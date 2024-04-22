@@ -1,9 +1,9 @@
-module Queue.Fake where
+module Example.Queue.Fake where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
 
-import Queue.Real (Queue)
+import Example.Queue.Real (Queue)
 import Stateful (Var(..))
 
 ------------------------------------------------------------------------
