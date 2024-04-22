@@ -15,7 +15,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
 import Stateful
-import Parallel2
+import Parallel
 
 ------------------------------------------------------------------------
 

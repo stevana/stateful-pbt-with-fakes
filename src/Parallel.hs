@@ -1,7 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,31 +13,34 @@ module Parallel where
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Monad.Catch
+import Control.Exception (SomeException, try, displayException)
 import Control.Monad.IO.Class
 import Data.Dynamic
+import Data.Foldable
 import Data.List
-import Data.Maybe
+import Data.Proxy
 import Data.Tree
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
-import StateModel hiding (Event, History)
+import Stateful
 
 ------------------------------------------------------------------------
 
 newtype ParallelCommands state = ParallelCommands
-  { unParallelCommands :: [[Untyped (Command state)]]
+  { unParallelCommands :: [[Command state (Var (Reference state))]]
   }
 deriving stock instance
-  (forall resp. Show (Command state resp)) => Show (ParallelCommands state)
+  Show (Command state (Var (Reference state))) => Show (ParallelCommands state)
+deriving stock instance
+  Eq (Command state (Var (Reference state))) => Eq (ParallelCommands state)
 
 instance StateModel state => Arbitrary (ParallelCommands state) where
 
   arbitrary :: Gen (ParallelCommands state)
   arbitrary = ParallelCommands <$> go initialState
     where
-      go :: state -> Gen [[Untyped (Command state)]]
+      go :: state -> Gen [[Command state (Var (Reference state))]]
       go s = sized $ \n ->
         let
           w = n `div` 2 + 1
@@ -48,53 +51,57 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
                      mcmds <- vectorOf k (generateCommand s)
                                 `suchThatMaybe` parSafe s
                      case mcmds of
-                       Nothing -> return []
-                       Just cmds-> (cmds :) <$> go (advanceState s cmds))
+                       Nothing   -> return []
+                       Just cmds -> (cmds :) <$> go (nextStateParallel s cmds))
             ]
 
   shrink :: ParallelCommands state -> [ParallelCommands state]
-  shrink (ParallelCommands cmdss)
+  shrink (ParallelCommands cmdss0)
     = map (ParallelCommands . pruneParallel . map (map fst))
-          (shrinkList (shrinkList shrinker) (map withStates cmdss))
+          (shrinkList (shrinkList shrinker) (map withStates cmdss0))
     where
-      shrinker :: (Untyped (Command state), state)
-               -> [(Untyped (Command state), state)]
+      shrinker :: (Command state (Var (Reference state)), state)
+               -> [(Command state (Var (Reference state)), state)]
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
-pruneParallel :: StateModel state
-              => [[Untyped (Command state)]] -> [[Untyped (Command state)]]
-pruneParallel = go initialState
-  where
-    go _s [] = []
-    go s (cmds : cmdss)
-      | parSafe s cmds = cmds : go (advanceState s cmds) cmdss
-      | otherwise      =        go s cmdss
+      pruneParallel :: StateModel state
+                    => [[Command state (Var (Reference state))]]
+                    -> [[Command state (Var (Reference state))]]
+      pruneParallel = go initialState
+        where
+          go _s [] = []
+          go s (cmds : cmdss)
+            | parSafe s cmds = cmds : go (nextStateParallel s cmds) cmdss
+            | otherwise      =        go s cmdss
 
 parSafe :: StateModel state
-        => state -> [Untyped (Command state)] -> Bool
-parSafe s = all (validCommands s) . permutations
+        => state -> [Command state (Var (Reference state))] -> Bool
+parSafe s0 = all (validCommands s0) . permutations
+  where
+    validCommands :: StateModel state
+                  => state -> [Command state (Var (Reference state))] -> Bool
+    validCommands _s []           = True
+    validCommands s  (cmd : cmds)
+      | precondition s cmd = validCommands (nextState s cmd) cmds
+      | otherwise          = False
 
-validCommands :: StateModel state
-              => state -> [Untyped (Command state)] -> Bool
-validCommands _s []           = True
-validCommands s  (cmd : cmds)
-  | precondition s cmd = validCommands (nextState s cmd) cmds
-  | otherwise          = False
-
-advanceState :: StateModel state => state -> [Untyped (Command state)] -> state
-advanceState s cmds = foldl' (\ih cmd -> nextState ih cmd) s cmds
+nextStateParallel :: StateModel state
+                  => state -> [Command state (Var (Reference state))] -> state
+nextStateParallel s cmds = foldl' (\ih cmd -> nextState ih cmd) s cmds
 
 ------------------------------------------------------------------------
 
 newtype History state = History [Event state]
 deriving stock instance
-  (forall resp. Show (Command state resp)) => Show (History state)
+   (Show (Command state (Var (Reference state))),
+    Show (Response state (Reference state))) => Show (History state)
 
 data Event state
-  = Invoke Pid (Untyped (Command state))
-  | Ok     Pid Dynamic
+  = Invoke Pid (Command state (Var (Reference state)))
+  | Ok     Pid (Response state (Reference state))
 deriving stock instance
-  (forall resp. Show (Command state resp)) => Show (Event state)
+  (Show (Command state (Var (Reference state))),
+   Show (Response state (Reference state))) => Show (Event state)
 
 newtype Pid = Pid Int
   deriving stock (Eq, Ord, Show)
@@ -102,27 +109,26 @@ newtype Pid = Pid Int
 toPid :: ThreadId -> Pid
 toPid tid = Pid (read (drop (length ("ThreadId " :: String)) (show tid)))
 
-data Op state = forall resp. Eq resp =>
-  Op (Command state resp)
-     (Return state resp)
+data Op state = Op (Command state (Var (Reference state)))
+                   (Response state (Reference state))
 
-interleavings :: Typeable state => History state -> Forest (Op state)
+------------------------------------------------------------------------
+
+interleavings :: History state -> Forest (Op state)
 interleavings (History [])  = []
 interleavings (History evs0) =
-  [ Node (Op cmd (fromDyn_ resp)) (interleavings (History evs'))
-  | (tid, Untyped cmd) <- takeInvocations evs0
-  , (resp, evs')       <- findResponse tid
-                            (filter1 (not . matchInvocation tid) evs0)
+  [ Node (Op cmd resp) (interleavings (History evs'))
+  | (tid, cmd)   <- takeInvocations evs0
+  , (resp, evs') <- findResponse tid
+                      (filter1 (not . matchInvocation tid) evs0)
   ]
   where
-    fromDyn_ resp = fromDyn resp (error "interleavings: impossible")
-
-    takeInvocations :: [Event state] -> [(Pid, Untyped (Command state))]
+    takeInvocations :: [Event state] -> [(Pid, Command state (Var (Reference state)))]
     takeInvocations []                         = []
     takeInvocations ((Invoke pid cmd)   : evs) = (pid, cmd) : takeInvocations evs
     takeInvocations ((Ok    _pid _resp) : _)   = []
 
-    findResponse :: Pid -> [Event state] -> [(Dynamic, [Event state])]
+    findResponse :: Pid -> [Event state] -> [(Response state (Reference state), [Event state])]
     findResponse _pid []                                   = []
     findResponse  pid ((Ok pid' resp) : evs) | pid == pid' = [(resp, evs)]
     findResponse  pid (ev             : evs)               =
@@ -137,82 +143,52 @@ interleavings (History evs0) =
     filter1 p (x : xs) | p x       = x : filter1 p xs
                        | otherwise = xs
 
-runParallelReal :: forall state resp. (StateModel state, MonadIO (CommandMonad state),
-                   Typeable state, Typeable resp, Eq resp, Show resp)
-                => TQueue (Event state) -> Env state
-                -> Command state  resp
-                -> IO (Maybe (Reference state))
-runParallelReal evs env cmd = do
-  pid <- toPid <$> liftIO myThreadId
-  liftIO (atomically (writeTQueue evs (Invoke pid (Untyped cmd))))
-  ret <- runCommandMonad (undefined :: state) (runReal env cmd)
-  liftIO (atomically (writeTQueue evs (Ok pid (toDyn ret))))
-  case ret of
-    Response _resp -> return Nothing
-    Reference ref  -> return (Just ref)
-
-linearisable :: forall state. StateModel state => Forest (Op state) -> Bool
-linearisable = any' (go initialState)
+linearisable :: forall state. StateModel state => [(Int, Dynamic)] -> Forest (Op state) -> Bool
+linearisable vars = any' (go initialState)
   where
     go :: state -> Tree (Op state) -> Bool
-    go s (Node (Op cmd ret) ts) =
+    go s (Node (Op cmd cresp) ts) =
       case runFake cmd s of
-        Left err -> undefined
-        Right (s', resp') ->
-          case ret of
-            Response resp ->
-              resp == resp' && any' (go s') ts
-            Reference _ref ->
-              any' (go s') ts
+        Left _err -> error "linearisable: impossible, all precondtions are satisifed during generation"
+        Right (s', resp) ->
+          cresp == fmap (sub vars) resp && any' (go s') ts
 
     any' :: (a -> Bool) -> [a] -> Bool
     any' _p [] = True
     any'  p xs = any p xs
 
-runParallelCommands :: forall state.
-  (StateModel state, MonadIO (CommandMonad state),
-  MonadCatch (CommandMonad state), Typeable state, Typeable (Reference state),
-  (forall resp. Show (Command state resp)), Show (Reference state))
-  => ParallelCommands state -> PropertyM (CommandMonad state) ()
+------------------------------------------------------------------------
+
+runParallelCommands :: forall state. StateModel state
+                    => ParallelCommands state -> PropertyM (CommandMonad state) ()
 runParallelCommands (ParallelCommands cmdss0) = do
-  -- replicateM_ 10 $ do
-  --  monitor (tabulate "Commands" (map constructorString (concat cmdss)))
+  forM_ (concat cmdss0) $ \cmd ->
+    let name = commandName cmd in
+      monitor (tabulate "Commands" [name] . classify True name)
   monitor (tabulate "Number of concurrent commands" (map (show . length) cmdss0))
   evs <- liftIO newTQueueIO :: PropertyM (CommandMonad state) (TQueue (Event state))
-  go evs [] cmdss0
+  vars <- go evs [] cmdss0
   hist <- History <$> liftIO (atomically (flushTQueue evs))
-  -- counterexample (prettyHistory hist)
-  assert (linearisable (interleavings hist))
+  monitor (counterexample (show hist))
+  assert (linearisable vars (interleavings hist))
   where
-    go _evs _vars [] = return ()
+    go _evs vars [] = return vars
     go evs vars (cmds : cmdss) = do
-      mrefs <- liftIO $ mapConcurrently (\(Untyped cmd_) -> runParallelReal evs (sub vars) cmd_) cmds
-      let vars' = vars ++ zip [length vars..] (map toDyn (catMaybes mrefs))
+      refss <- liftIO $
+        mapConcurrently (\cmd -> runParallelReal evs (sub vars) cmd) cmds
+      let vars' = vars ++ zip [length vars..] (map toDyn (concat refss))
       go evs vars' cmdss
 
-
-  {-
-prop_concurrent :: Property
-prop_concurrent = mapSize (min 20) $
-  forAllConcProgram $ \(ConcProgram cmdss) -> monadicIO $ do
-    monitor (classifyCommandsLength (concat cmdss))
-    -- Rerun a couple of times, to avoid being lucky with the interleavings.
-    monitor (tabulate "Commands" (map constructorString (concat cmdss)))
-    monitor (tabulate "Number of concurrent commands" (map (show . length) cmdss))
-    replicateM_ 10 $ do
-      counter <- run newCounter
-      queue <- run newTQueueIO
-      run (mapM_ (mapConcurrently (concExec queue counter)) cmdss)
-      hist <- History <$> run (atomically (flushTQueue queue))
-      assertWithFail (linearisable step initModel (interleavings hist)) (prettyHistory hist)
-  where
-    constructorString :: Command -> String
-    constructorString Incr {} = "Incr"
-    constructorString Get  {} = "Get"
-
-assertWithFail :: Monad m => Bool -> String -> PropertyM m ()
-assertWithFail condition msg = do
-  unless condition $
-    monitor (counterexample ("Failed: " ++ msg))
-  assert condition
--}
+runParallelReal :: forall state. StateModel state
+                => TQueue (Event state) -> Env state
+                -> Command state (Var (Reference state))
+                -> IO [Reference state]
+runParallelReal evs env cmd = do
+  pid <- toPid <$> liftIO myThreadId
+  liftIO (atomically (writeTQueue evs (Invoke pid cmd)))
+  eResp <- try (runCommandMonad (Proxy :: Proxy state) (runReal (fmap env cmd)))
+  case eResp of
+    Left (err :: SomeException) -> error (displayException err)
+    Right resp -> do
+      liftIO (atomically (writeTQueue evs (Ok pid resp)))
+      return (toList resp)

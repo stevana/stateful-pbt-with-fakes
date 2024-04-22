@@ -34,7 +34,6 @@ library
     FileSystem.Interface
     FileSystem.Test
     Parallel
-    Parallel2
     Stateful
     StateModel
 
