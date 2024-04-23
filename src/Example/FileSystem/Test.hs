@@ -58,6 +58,9 @@ instance StateModel State where
       withoutHandle =
         [ MkDir <$> genDir
         , Open <$> genFile
+        -- XXX: introduce bug in generation which causes OpenTwo never to happen.
+        -- XXX: can further be improved using coverTable
+        -- ] ++ [ Open <$> genFile | null (Map.keys (open s)) ] ++
         , Read <$> if null (Map.keys (files s))
                    then genFile
                    else genWrittenFile s
@@ -102,7 +105,11 @@ instance StateModel State where
   runReal (Close h)   = Close_ <$> iClose (real root) h
   runReal (Read f)    = Read_  <$> iRead (real root) f
 
-  runCommandMonad _ = id
+  monitoring :: (State, State) -> Command State Handle -> Response State Handle
+             -> Property -> Property
+  monitoring (_s, _s') Read {} (Read_ s) = classify (not (null s)) (show SuccessfulRead)
+  monitoring (_s, State s') _cmd _resp =
+    classify (length (Map.keys (open s')) >= 2) (show OpenTwo)
 
 ------------------------------------------------------------------------
 
@@ -112,7 +119,8 @@ data Tag = OpenTwo | SuccessfulRead
 root :: FilePath
 root = "/tmp/qc-test"
 
-assoc :: (a -> Response State (Var Handle)) -> (Either e a, Mock) -> Either e (State, Response State (Var Handle))
+assoc :: (a -> Response State (Var Handle)) -> (Either e a, Mock)
+      -> Either e (State, Response State (Var Handle))
 assoc _f (Left e, _s) = Left e
 assoc f  (Right x, s) = Right (State s, f x)
 
@@ -127,3 +135,6 @@ prop_fileSystem cmds = monadicIO $ do
     cleanup = do
       removePathForcibly root
       createDirectory root
+
+showLabelledExamples :: IO ()
+showLabelledExamples = labelledExamples prop_fileSystem

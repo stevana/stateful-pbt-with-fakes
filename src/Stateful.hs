@@ -194,7 +194,7 @@ runCommands (Commands cmds0) = go initialState [] cmds0
 sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
 sub vars (Var x) =
   case lookup x vars of
-    Nothing -> error $ "impossible, variable " ++ show x ++ " is unbound"
+    Nothing -> discard -- ^ This can happen if a shrink step makes a variable unbound.
     Just var_ ->
       case fromDynamic var_ of
         Nothing  -> error $ "impossible, variable " ++ show x ++ " has wrong type"
