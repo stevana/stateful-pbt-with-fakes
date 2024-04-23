@@ -902,11 +902,11 @@ does a read which is concurrent with the first thread's read.
 We can abstract away the arrows and merely focus on the intervals of the
 commands:
 
-![](../images/history-from-sequence-diagram.svg){ width=500px }
+![](./images/history-from-sequence-diagram.svg){ width=500px }
 
 If we rotate the intervals we get the concurrent history:
 
-![](../images/concurrent_counter.svg){ width=400px }
+![](./images/concurrent_counter.svg){ width=400px }
 
 Note that the execution of some commands overlap in time, this is what's meant
 by concurrent and arguebly it's easier to see the overlap here than in the
@@ -924,12 +924,12 @@ counter update its state).
 
 The first corresponds to the sequential history `< incr 1, get, incr 2, get >`:
 
-![](../images/concurrent_counter_get_1_3.svg){ width=400px }
+![](./images/concurrent_counter_get_1_3.svg){ width=400px }
 
 and the other interleaving corresponds to the sequential history `< incr 1, incr
 2, get, get >`:
 
-![](../images/concurrent_counter_get_3_3.svg){ width=400px }
+![](./images/concurrent_counter_get_3_3.svg){ width=400px }
 
 One last thing we've left out from the concurrent history so far is the
 responses. In this example, the only interesting responses are those of the
