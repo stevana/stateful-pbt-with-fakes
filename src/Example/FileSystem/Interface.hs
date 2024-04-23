@@ -1,13 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 
-module FileSystem.Interface where
+module Example.FileSystem.Interface where
 
 import Control.Exception
 import Data.IORef
 import System.IO
 import System.Directory
 
-import FileSystem.Fake
+import Example.FileSystem.Fake
 
 ------------------------------------------------------------------------
 

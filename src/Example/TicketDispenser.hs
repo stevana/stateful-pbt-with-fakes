@@ -26,6 +26,7 @@ instance Show (Opaque a) where
   show _ = "<opaque>"
 
 data State = NoState | State Int
+  deriving Show
 
 instance StateModel State where
 

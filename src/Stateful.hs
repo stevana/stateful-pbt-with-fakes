@@ -1,27 +1,25 @@
 {-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Stateful where
 
 import Control.Monad
 import Control.Monad.Catch
+import Control.Monad.IO.Class
 import Data.Dynamic
 import Data.Foldable
 import Data.Kind
 import Data.Void
-import Control.Monad.IO.Class
 import Test.QuickCheck hiding (Failure, Success)
 import Test.QuickCheck.Monadic
 
 ------------------------------------------------------------------------
-
-type Symbolic state = Command state (Var (Reference state))
-type Concrete state = Command state (Reference state)
 
 class ( Monad (CommandMonad state)
       , MonadIO (CommandMonad state)
@@ -30,10 +28,12 @@ class ( Monad (CommandMonad state)
       , Functor (Response state)
       , Foldable (Response state)
       , Eq (Response state (Reference state))
+      , Show state
       , Show (Command state (Var (Reference state)))
       , Show (Response state (Reference state))
       , Show (Response state (Var (Reference state)))
       , Show (Reference state)
+      , Show (Failure state)
       , Typeable (Reference state)
       , Typeable state
       ) => StateModel state where
@@ -49,19 +49,23 @@ class ( Monad (CommandMonad state)
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
 
-  generateCommand :: state -> Gen (Symbolic state)
+  generateCommand :: state -> Gen (Command state (Var (Reference state)))
 
-  shrinkCommand :: state -> Symbolic state -> [Symbolic state]
+  shrinkCommand :: state -> Command state (Var (Reference state))
+                -> [Command state (Var (Reference state))]
   shrinkCommand _state _cmd = []
 
   initialState :: state
 
-  runFake :: Symbolic state -> state
+  runFake :: Command state (Var (Reference state)) -> state
           -> Either (Failure state) (state, Response state (Var (Reference state)))
 
-  runReal :: Concrete state -> CommandMonad state (Response state (Reference state))
+  runReal :: Command state (Reference state)
+          -> CommandMonad state (Response state (Reference state))
 
-  monitoring :: (state, state) -> Concrete state -> Response state (Reference state)
+  monitoring :: (state, state)
+             -> Command state (Reference state)
+             -> Response state (Reference state)
              -> Property -> Property
   monitoring _states _cmd _resp = id
 
@@ -73,14 +77,14 @@ class ( Monad (CommandMonad state)
 
 ------------------------------------------------------------------------
 
--- XXX: Can be removed when StateModel.hs is removed?
-type Env state = Var (Reference state) -> Reference state
-
 data Var a = Var Int
-  deriving (Show, Eq, Ord)
+  deriving stock (Show, Eq, Ord)
 
 newtype NonFoldable a = NonFoldable a
-  deriving (Eq, Show, Functor)
+  deriving stock (Eq, Show)
+
+instance Functor NonFoldable where
+  fmap f (NonFoldable x) = NonFoldable (f x)
 
 instance Foldable NonFoldable where
   foldMap _f (NonFoldable _x) = mempty
@@ -89,15 +93,17 @@ instance Foldable NonFoldable where
 
 -- * Generating and shrinking
 
-newtype Commands state = Commands [Symbolic state]
-deriving instance Show (Symbolic state) => Show (Commands state)
+newtype Commands state = Commands [Command state (Var (Reference state))]
+deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
 
-precondition :: StateModel state => state -> Symbolic state -> Bool
+precondition :: StateModel state
+             => state -> Command state (Var (Reference state)) -> Bool
 precondition s cmd = case runFake cmd s of
   Left _  -> False
   Right _ -> True
 
-nextState :: StateModel state => state -> Symbolic state -> state
+nextState :: StateModel state
+          => state -> Command state (Var (Reference state)) -> state
 nextState s cmd = case runFake cmd s of
   Right (s', _) -> s'
   Left _err -> error "nextState: impossible, we checked for success in precondition"
@@ -108,7 +114,7 @@ instance StateModel state => Arbitrary (Commands state) where
   arbitrary = Commands <$> genCommands initialState
     where
       genCommands :: StateModel state
-                  => state -> Gen [Symbolic state]
+                  => state -> Gen [Command state (Var (Reference state))]
       genCommands s = sized $ \n ->
         let
           w = n `div` 2 + 1
@@ -123,17 +129,19 @@ instance StateModel state => Arbitrary (Commands state) where
 
   shrink :: Commands state -> [Commands state]
   shrink (Commands cmds) =
-    map (Commands . prune . map fst) (shrinkList shrinker (withStates cmds))
+    map (Commands . prune . map fst)
+        (shrinkList shrinker (snd (withStates initialState cmds)))
     where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
-withStates :: StateModel state => [Symbolic state] -> [(Symbolic state, state)]
-withStates = go initialState
+withStates :: StateModel state
+           => state -> [Command state (Var (Reference state))] -> (state, [(Command state (Var (Reference state)), state)])
+withStates s0 = go s0 []
   where
-    go _s []           = []
-    go  s (cmd : cmds) = (cmd, s) : go (nextState s cmd) cmds
+    go s acc []           = (s, reverse acc)
+    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
 
-prune :: StateModel state => [Symbolic state] -> [Symbolic state]
+prune :: StateModel state => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
 prune = go initialState
   where
     go _s [] = []
@@ -161,7 +169,7 @@ runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
 runCommands (Commands cmds0) = go initialState [] cmds0
   where
-    go :: state -> [(Int, Dynamic)] -> [Symbolic state]
+    go :: state -> [(Int, Dynamic)] -> [Command state (Var (Reference state))]
        -> PropertyM (CommandMonad state) ()
     go _state _vars [] = return ()
     go  state  vars (cmd : cmds) = do
@@ -186,9 +194,8 @@ runCommands (Commands cmds0) = go initialState [] cmds0
 sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
 sub vars (Var x) =
   case lookup x vars of
-    Nothing -> error $ "discard: vars = " ++ show vars ++ ", var = " ++ show x -- discard
-      -- ^ this can happen if a shrink step makes a variable unbound
+    Nothing -> error $ "impossible, variable " ++ show x ++ " is unbound"
     Just var_ ->
       case fromDynamic var_ of
-        Nothing  -> error $ "variable " ++ show x ++ " has wrong type"
+        Nothing  -> error $ "impossible, variable " ++ show x ++ " has wrong type"
         Just var -> var

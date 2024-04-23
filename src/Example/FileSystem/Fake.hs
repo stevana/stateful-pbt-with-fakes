@@ -1,6 +1,6 @@
 -- Stolen from https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 
-module FileSystem.Fake (
+module Example.FileSystem.Fake (
     -- * Paths
     Dir(..)
   , File(..)
@@ -10,7 +10,6 @@ module FileSystem.Fake (
   , Err(..)
   , fromIOError
     -- * Mock file system
-  , Var(..)
   , MHandle
   , Mock(..)
   , MockOp
@@ -34,7 +33,7 @@ import qualified Data.List as List
 import qualified Data.Map  as Map
 import qualified Data.Set  as Set
 
-import StateModel (Var(Var))
+import Stateful (Var(Var))
 
 {-------------------------------------------------------------------------------
   Paths

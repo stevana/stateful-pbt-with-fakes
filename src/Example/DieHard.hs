@@ -56,10 +56,10 @@ instance StateModel Model where
                 , smallJug = small'
                 })
 
-  runReal :: Concrete Model -> IO (Response Model (Reference Model))
+  runReal :: Command Model Void -> IO (Response Model (Reference Model))
   runReal _cmd = return Done
 
-  monitoring :: (Model, Model) -> Concrete Model -> Response Model (Reference Model)
+  monitoring :: (Model, Model) -> Command Model Void -> Response Model Void
              -> Property -> Property
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"

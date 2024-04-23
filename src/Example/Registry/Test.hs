@@ -7,13 +7,15 @@
 
 module Example.Registry.Test where
 
+import Control.Arrow
 import Control.Concurrent
 import Control.Exception (ErrorCall(..), try)
+import Control.Monad
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
-import Control.Arrow
 
 import Example.Registry.Real
+import Parallel
 import Stateful
 
 ------------------------------------------------------------------------
@@ -45,27 +47,33 @@ instance StateModel RegState where
     | Unregister' ()
     deriving (Eq, Show, Functor, Foldable)
 
-  generateCommand :: RegState -> Gen (Symbolic RegState)
-  generateCommand s = oneof
-    [ return Spawn
-    , Register <$> arbitraryName <*> elements (tids s)
-    , Unregister <$> arbitraryName
+  generateCommand :: RegState -> Gen (Command RegState (Var ThreadId))
+  generateCommand s = oneof $
+    [ return Spawn ] ++
+    [ Register <$> arbitraryName <*> elements (tids s) | not (null (tids s)) ] ++
+    [ Unregister <$> arbitraryName
     , WhereIs <$> arbitraryName
     ]
 
   type Failure RegState = ()
 
-  runFake :: Symbolic RegState -> RegState -> Either () (RegState, Response RegState (Var (Reference RegState)))
+  runFake :: Command RegState (Var ThreadId)-> RegState
+          -> Either () (RegState, Response RegState (Var ThreadId))
   runFake Spawn               s = let tid = Var (length (tids s)) in
                                   return (s { tids = tids s ++ [tid] }, Spawn' tid)
   runFake (WhereIs name)      s = return (s, WhereIs' (NonFoldable (lookup name (regs s))))
   runFake (Register name tid) s
-    | tid `elem` tids s && name `notElem` map fst (regs s) && tid `notElem` map snd (regs s) =
-       return (s { regs = (name, tid) : regs s }, Register' (Right ()))
+    | tid `elem` tids s
+    , name `notElem` map fst (regs s)
+    , tid `notElem` map snd (regs s)
+    = return (s { regs = (name, tid) : regs s }, Register' (Right ()))
 
-    | tid `elem` tids s && tid `elem` map snd (regs s) = return (s, Register' (Left (ErrorCall "bad argument")))
-    | otherwise =
-       Left ()
+    | tid `elem` tids s
+    , name `elem` map fst (regs s)
+    , tid `elem` map snd (regs s)
+    = return (s, Register' (Left (ErrorCall "bad argument")))
+
+    | otherwise = Left ()
   runFake (Unregister name)   s
     | name `elem` map fst (regs s) =
         return (s { regs = remove name (regs s) }, Unregister' ())
@@ -74,8 +82,8 @@ instance StateModel RegState where
     where
       remove x = filter ((/= x) . fst)
 
-  runReal :: Concrete RegState -> IO (Response RegState (Reference RegState))
-  runReal Spawn               = Spawn'    <$> forkIO (threadDelay 10000000)
+  runReal :: Command RegState ThreadId -> IO (Response RegState ThreadId)
+  runReal Spawn               = Spawn'    <$> forkIO (threadDelay 100000000)
   runReal (WhereIs name)      = WhereIs' . NonFoldable <$> whereis name
   runReal (Register name tid) = Register' <$> fmap (left abstractError) (try (register name tid))
     where
@@ -84,10 +92,10 @@ instance StateModel RegState where
       abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
   runReal (Unregister name)   = Unregister' <$> unregister name
 
-  monitoring :: (RegState, RegState) -> Concrete RegState -> Response RegState (Reference RegState)
+  monitoring :: (RegState, RegState) -> Command RegState ThreadId -> Response RegState ThreadId
              -> Property -> Property
   monitoring (_s, s') _cmd _resp =
-    counterexample $ "\n    State: "++show s'++"\n"
+    counterexample $ "\n    State: " ++ show s' ++ "\n"
 
   runCommandMonad _ = id
 
@@ -97,10 +105,10 @@ arbitraryName = elements allNames
 allNames :: [String]
 allNames = ["a", "b", "c", "d", "e"]
 
-prop_registry :: Commands RegState -> Property
-prop_registry cmds = monadicIO $ do
-  _ <- run cleanUp
+prop_registrySeq :: Commands RegState -> Property
+prop_registrySeq cmds = monadicIO $ do
   runCommands cmds
+  _ <- run cleanUp
   assert True
 
 cleanUp :: IO [Either ErrorCall ()]
@@ -113,3 +121,10 @@ kill :: ThreadId -> IO ()
 kill tid = do
   killThread tid
   yield
+
+prop_registryPar :: ParallelCommands RegState -> Property
+prop_registryPar cmds = monadicIO $ do
+  replicateM_ 10 $ do
+    runParallelCommands cmds
+    void (run cleanUp)
+  assert True

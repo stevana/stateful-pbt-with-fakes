@@ -47,7 +47,7 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
         in
           frequency
             [ (1, return [])
-            , (w, do k <- chooseInt (1, 5)
+            , (w, do k <- chooseInt (1, 4)
                      mcmds <- vectorOf k (generateCommand s)
                                 `suchThatMaybe` parSafe s
                      case mcmds of
@@ -58,7 +58,7 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
   shrink :: ParallelCommands state -> [ParallelCommands state]
   shrink (ParallelCommands cmdss0)
     = map (ParallelCommands . pruneParallel . map (map fst))
-          (shrinkList (shrinkList shrinker) (map withStates cmdss0))
+          (shrinkList (shrinkList shrinker) (withParStates cmdss0))
     where
       shrinker :: (Command state (Var (Reference state)), state)
                -> [(Command state (Var (Reference state)), state)]
@@ -74,6 +74,17 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
             | parSafe s cmds = cmds : go (nextStateParallel s cmds) cmdss
             | otherwise      =        go s cmdss
 
+withParStates :: StateModel state
+              => [[Command state (Var (Reference state))]] -> [[(Command state (Var (Reference state)), state)]]
+withParStates = go initialState
+  where
+    go _s []             = []
+    go  s (cmds : cmdss) =
+      let
+        (s', cmdsAndStates) = withStates s cmds
+      in
+        cmdsAndStates : go s' cmdss
+
 parSafe :: StateModel state
         => state -> [Command state (Var (Reference state))] -> Bool
 parSafe s0 = all (validCommands s0) . permutations
@@ -88,6 +99,13 @@ parSafe s0 = all (validCommands s0) . permutations
 nextStateParallel :: StateModel state
                   => state -> [Command state (Var (Reference state))] -> state
 nextStateParallel s cmds = foldl' (\ih cmd -> nextState ih cmd) s cmds
+
+validParallelCommands :: StateModel state => ParallelCommands state -> Bool
+validParallelCommands (ParallelCommands cmdss0) = go initialState cmdss0
+  where
+    go _s [] = True
+    go s (cmds : cmdss) | parSafe s cmds = go (nextStateParallel s cmds) cmdss
+                        | otherwise      = False
 
 ------------------------------------------------------------------------
 
@@ -143,13 +161,16 @@ interleavings (History evs0) =
     filter1 p (x : xs) | p x       = x : filter1 p xs
                        | otherwise = xs
 
-linearisable :: forall state. StateModel state => [(Int, Dynamic)] -> Forest (Op state) -> Bool
+linearisable :: forall state. StateModel state
+             => [(Int, Dynamic)] -> Forest (Op state) -> Bool
 linearisable vars = any' (go initialState)
   where
     go :: state -> Tree (Op state) -> Bool
     go s (Node (Op cmd cresp) ts) =
       case runFake cmd s of
-        Left _err -> error "linearisable: impossible, all precondtions are satisifed during generation"
+        Left err ->
+          error $ "linearisable: impossible, all precondtions are satisifed during generation\ncmd = " ++
+                  show cmd ++ "\ns = " ++ show s ++ "\nerr = " ++ show err
         Right (s', resp) ->
           cresp == fmap (sub vars) resp && any' (go s') ts
 
@@ -180,7 +201,8 @@ runParallelCommands (ParallelCommands cmdss0) = do
       go evs vars' cmdss
 
 runParallelReal :: forall state. StateModel state
-                => TQueue (Event state) -> Env state
+                => TQueue (Event state)
+                -> (Var (Reference state) -> Reference state)
                 -> Command state (Var (Reference state))
                 -> IO [Reference state]
 runParallelReal evs env cmd = do
@@ -188,7 +210,8 @@ runParallelReal evs env cmd = do
   liftIO (atomically (writeTQueue evs (Invoke pid cmd)))
   eResp <- try (runCommandMonad (Proxy :: Proxy state) (runReal (fmap env cmd)))
   case eResp of
-    Left (err :: SomeException) -> error (displayException err)
+    Left (err :: SomeException) ->
+      error ("runParallelCommands: " ++ displayException err)
     Right resp -> do
       liftIO (atomically (writeTQueue evs (Ok pid resp)))
       return (toList resp)

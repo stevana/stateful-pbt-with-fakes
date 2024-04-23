@@ -22,6 +22,9 @@ library
   import:           warnings
   exposed-modules:
     Example.DieHard
+    Example.FileSystem.Fake
+    Example.FileSystem.Interface
+    Example.FileSystem.Test
     Example.Queue.Fake
     Example.Queue.Real
     Example.Queue.Test
@@ -29,13 +32,8 @@ library
     Example.Registry.RealBuggy
     Example.Registry.Test
     Example.TicketDispenser
-    FileSystem
-    FileSystem.Fake
-    FileSystem.Interface
-    FileSystem.Test
     Parallel
     Stateful
-    StateModel
 
   build-depends:
     , array

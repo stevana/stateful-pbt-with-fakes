@@ -7,6 +7,7 @@ import Example.Queue.Test
 import Example.DieHard
 import Example.TicketDispenser
 import Example.Registry.Test
+import Example.FileSystem.Test
 
 ------------------------------------------------------------------------
 
@@ -17,7 +18,9 @@ tests :: TestTree
 tests = testGroup "Tests"
   [ testProperty "Queue" prop_queue
   , testProperty "DieHard" (expectFailure prop_dieHard)
-  , testProperty "Registry" prop_registry
+  , testProperty "RegistrySeq" prop_registrySeq
+  , testProperty "RegistryPar" prop_registryPar
   , testProperty "TicketDispenserSeq" prop_ticketDispenserSeq
   , testProperty "TicketDispenserPar" (expectFailure prop_ticketDispenserPar)
+  , testProperty "FileSystem" prop_fileSystem
   ]
