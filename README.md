@@ -892,7 +892,9 @@ concept: a sequence diagram.
 
 Consider the following sequence diagram:
 
-![](./images/sequence-diagram.svg){ width=300px }
+<img
+src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/sequence-diagram.svg"
+width=60%>
 
 Here we see that the first and second thread concurrently increment, the first
 thread then reads the counter concurrently with the second thread's increment
@@ -902,11 +904,15 @@ does a read which is concurrent with the first thread's read.
 We can abstract away the arrows and merely focus on the intervals of the
 commands:
 
-![](./images/history-from-sequence-diagram.svg){ width=400px }
+<img
+src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/history-from-sequence-diagram.svg"
+width=60%>
 
 If we rotate the intervals we get the concurrent history:
 
-![](./images/concurrent_counter.svg){ width=300px }
+<img
+src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/concurrent_counter.svg"
+width=60%>
 
 Note that the execution of some commands overlap in time, this is what's meant
 by concurrent and arguebly it's easier to see the overlap here than in the
@@ -924,12 +930,16 @@ counter update its state).
 
 The first corresponds to the sequential history `< incr 1, get, incr 2, get >`:
 
-![](./images/concurrent_counter_get_1_3.svg){ width=300px }
+<img
+src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/concurrent_counter_get_1_3.svg"
+width=60%>
 
 and the other interleaving corresponds to the sequential history `< incr 1, incr
 2, get, get >`:
 
-![](./images/concurrent_counter_get_3_3.svg){ width=300px }
+<img
+src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/concurrent_counter_get_3_3.svg"
+width=60%>
 
 One last thing we've left out from the concurrent history so far is the
 responses. In this example, the only interesting responses are those of the
