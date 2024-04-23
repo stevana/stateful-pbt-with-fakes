@@ -3,24 +3,19 @@
 *Work in progress, please don't share, but do get involved!*
 
 Property-based testing is a rare example of academic research that has made it
-to the mainstream in less than 30 years.
-
-Under the slogan "don't write tests, generate them" property-based testing has
-gained support from a diverse group of programming language communities.
-
-In fact, the Wikipedia page of the original property-basted testing Haskell
-library, [QuickCheck](https://en.wikipedia.org/wiki/QuickCheck), lists 57
+to the mainstream in less than 30 years. Under the slogan "don't write tests,
+generate them" property-based testing has gained support from a diverse group of
+programming language communities. In fact, the Wikipedia page of the original
+property-basted testing Haskell library,
+[QuickCheck](https://en.wikipedia.org/wiki/QuickCheck), lists 57
 reimplementations in other languages.
 
 In this post I'd like to survey the most popular property-based testing
 implementations and compare them with what used to be the state-of-the-art 15
-years ago (2009).
-
-As the title already gives away, most of the libraries do not offer their users
-the most advanced property-based testing features.
-
-In order to best explain what's missing and why I think we ended up in this
-situation, let me start by telling the brief history of property-based testing.
+years ago (2009). As the title already gives away, most of the libraries do not
+offer their users the most advanced property-based testing features. In order to
+best explain what's missing and why I think we ended up in this situation, let
+me start by telling the brief history of property-based testing.
 
 ## The history of property-based testing
 
@@ -146,7 +141,7 @@ to [*Linearizability: a correctness condition for concurrent
 objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990) which is
 the main technique behind it.
 
-I'd like to stress that no Quviq QuickCheck library code is every shared in any
+I'd like to stress that no Quviq QuickCheck library code is ever shared in any
 of these papers, they only contain the library APIs (which are public) and test
 examples implemented using said APIs.
 
@@ -789,17 +784,192 @@ When we run `quickcheck prop_dieHard` we get the following output:
     Got: Done
 ```
 
+Notice how the trace shows the intermediate states, making it easy to verify
+that it's indeed a correct solution to the puzzle.
+
 ### Parallel property-based testing in ~300 LOC
+
+Let's now turn our focus to parallel property-based testing.
+
+Before showing you the implementation, let me start off by giving a bit of
+motivation, a high-level sketch of how it works, and mentioning some prior work
+that I've stolen ideas from.
 
 #### Motivation
 
+Typically debugging buggy concurrent code is not fun. The main reason for this
+is that the threads interleave in different ways between executions, making it
+hard to reproduce the bug.
+
+By generating tests, running the same tests many times and shrinking them,
+parallel property-based testing tries to make it slightly less burdensome on the
+programmer.
+
+XXX:
+We've seen how to test if a sequential (single-threaded) program respects some
+specification.
+
+We did so by generating a random sequence of commands and then applied them one
+by one to both the real software under test (SUT), a counter, and the state
+machine specification and then compared the outputs.
+
+Counters are often shared among different threads though, for example to keep
+track of some metric like current number of concurrent connections that our
+service is serving.
+
+So we might want to ask ourselves: how can we test that the counter
+implementation is thread-safe?
+
+Below we will show how the *same* state machine specification that we already
+developed previously can be used to check if a concurrent execution is correct
+using a technique called linearisability checking.
+
 #### How it works
+
+Let's first recall our counter example from last time:
+
+```haskell
+ > c <- newCounter
+ > incr c 1
+ > incr c 2
+ > get c
+ 3
+```
+
+When we interact with the counter sequentially, i.e. one command at the time,
+then it appears to count correctly.
+
+But if we instead concurrently issue the `incr`ements , we see something
+strange:
+
+```haskell
+ > forM_ [0..100000] $ \i -> do
+ >   c <- newCounter
+ >   concurrently_ (incr c 1) (incr c 2)
+ >   x <- get c
+ >   if x == 3 then return () else error ("i = " ++ show i ++ ", x = " ++ show x)
+ *** Exception: i = 29768, x = 1
+```
+
+After 29768 iterations we get back `1` rather than the expected `3`! The reason
+for this is because there's a race condition in the implementation of `incr`:
+
+```haskell
+ incr (Counter ref) i = do
+   j <- readIORef ref
+   writeIORef ref (i + j)
+```
+
+Because we first read the old value and _then_ write the new incremented value
+in an non-atomic way, it's possilbe that if two threads do this at the same time
+they overwrite each others increment. For example:
+
+```
+   thread 1, incr 1         |  thread 2, incr 2
+   -------------------------+------------------
+    0 <- readIORef ref      |
+                            | 0 <- readIORef ref
+                            | writeIORef ref (2 + 0)
+    writeIORef ref (1 + 0)  |
+                            |
+                            v
+                           time
+```
+
+If we read from the counter after the two increments are done we get `1` instead
+of the expected `3`. The fix to this problem is to do an atomic update using
+`atomicModifyIORef'`, instead of first reading and then writing to the `IORef`.
+
+The concurrent test that we just wrote is not only specific to the counter
+example but also only uses three fixed commands, the two concurrent `incr`ements
+followed by a `get`. While it was enough to find this race condition, in general
+we'd like to try arbitrary combinations of commands and possibly involving more
+than two threads.
+
+The key concept we need in order to accomplish that is that of *concurrent
+history*, which is perhaps easiest to explain in terms of a more familiar
+concept: a sequence diagram.
+
+Consider the following sequence diagram:
+
+![](../images/sequence-diagram.svg){ width=400px }
+
+Here we see that the first and second thread concurrently increment, the first
+thread then reads the counter concurrently with the second thread's increment
+that's still going on. The second thread's increment finishes and a third thread
+does a read which is concurrent with the first thread's read.
+
+We can abstract away the arrows and merely focus on the intervals of the
+commands:
+
+![](../images/history-from-sequence-diagram.svg){ width=500px }
+
+If we rotate the intervals we get the concurrent history:
+
+![](../images/concurrent_counter.svg){ width=400px }
+
+Note that the execution of some commands overlap in time, this is what's meant
+by concurrent and arguebly it's easier to see the overlap here than in the
+original sequence diagram.
+
+We've also abstracted away the counter, it's a black box from the perspective of
+the threads. The only thing we know for sure is when we invoked the operation
+and when it returned, which is what our interval captures. We also know that the
+effect of the operation must have happend sometime within that interval.
+
+One such concurrent history can have different interleavings, depending on when
+exactly the effect of the commands happen. Here are two possible interleavings,
+where the red cross symbolises when the effect happened (i.e. when exactly the
+counter update its state).
+
+The first corresponds to the sequential history `< incr 1, get, incr 2, get >`:
+
+![](../images/concurrent_counter_get_1_3.svg){ width=400px }
+
+and the other interleaving corresponds to the sequential history `< incr 1, incr
+2, get, get >`:
+
+![](../images/concurrent_counter_get_3_3.svg){ width=400px }
+
+One last thing we've left out from the concurrent history so far is the
+responses. In this example, the only interesting responses are those of the
+`get`s.
+
+Let's say that the `get`s returned `1` and `3` respectively. Is this a correct
+concurrent outcome? Yes, according to linearisability it's enough to find a
+single interleaving for which the sequential state machine model can explain the
+outcome and in this case the first interleaving above `< incr 1, get, incr 2,
+get >` does that.
+
+What if the `get`s both returned `3`? That's also correct and witnessed by the
+second interleaving `< incr 1, incr 2, get, get >`. When we can find a
+sequential interleaving that supports the outcome of a concurrent execution we
+say that the concurrent history linearises.
+
+If the `get` on the third thread returned `1` or `2` however, then it would be a
+non-linearisable outcome. We can see visually that that `get` happens after both
+`incr`, so no matter where we choose to place the red crosses on the `incr`s the
+effects will happen before that `get` so it must return `3`. Is it even possilbe
+that `1` or `2` are returned? It's, imagine if `incr` is implemented by first
+reading the current value then storing the incremented value, in that case there
+can be a race where the `incr`s overwrite each other.
+
+So to summarise, we execute commands concurrently using several threads and
+gather a concurrent history of the execution. We then try to find a sequential
+interleaving (a choice of where the red crosses in the diagrams should be) which
+respects the a sequential state machine model specfication. If we find a single
+one that does, then we say that the history linearises and that the concurrent
+execution is correct, if we cannot find a sequential interleaving that respects
+the model then the history doesn't linearise and we have found a problem.
 
 #### Prior work
 
 * PropEr
 * qsm
-* Jepsen's Knossos
+
+* Not property-based testing per say, but similar in that it generates random
+  commands and checks linearisability is Jepsen's Knossos
+
 * Linearizability paper
 * Erlang
 
