@@ -135,13 +135,15 @@ instance StateModel state => Arbitrary (Commands state) where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
 
 withStates :: StateModel state
-           => state -> [Command state (Var (Reference state))] -> (state, [(Command state (Var (Reference state)), state)])
+           => state -> [Command state (Var (Reference state))]
+           -> (state, [(Command state (Var (Reference state)), state)])
 withStates s0 = go s0 []
   where
     go s acc []           = (s, reverse acc)
     go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
 
-prune :: StateModel state => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
+prune :: StateModel state
+      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
 prune = go initialState
   where
     go _s [] = []

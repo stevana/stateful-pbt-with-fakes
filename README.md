@@ -11,11 +11,11 @@ property-basted testing Haskell library,
 reimplementations in other languages.
 
 In this post I'd like to survey the most popular property-based testing
-implementations and compare them with what used to be the state-of-the-art 15
-years ago (2009). As the title already gives away, most of the libraries do not
-offer their users the most advanced property-based testing features. In order to
-best explain what's missing and why I think we ended up in this situation, let
-me start by telling the brief history of property-based testing.
+implementations and compare them with what used to be the state-of-the-art
+fifteen years ago (2009). As the title already gives away, most of the libraries
+do not offer their users the most advanced property-based testing features. In
+order to best explain what's missing and why I think we ended up in this
+situation, let me start by telling the brief history of property-based testing.
 
 ## The history of property-based testing
 
@@ -36,97 +36,81 @@ John Hughes is a long-time member of the Functional Programming group, who's
 also well aware of the research on dependently typed programming going on in the
 Programming Logic group. One day in the late nineties, after having worked hard
 on finishing something important on time, John found himself having a week
-"off".
+"off". So, just for fun, he started experimenting with the idea of testing if a
+program respects a formal specification.
 
-So, just for fun, he started experimenting with the idea of testing if a program
-respects a formal specification. Typically in dependently typed programming you
-use the types to write the specification and then the program that implements
-that type is the formal proof that the program is correct.
-
-For example, let's say you've implemented a list sorting function, the
-specification typically then is that the output of the sorting function is
-ordered, i.e. for any index $i$ in your output list the element at that index
-must be smaller or equal to the element at index $i + 1$.
-
+Typically in dependently typed programming you use the types to write the
+specification and then the program that implements that type is the formal proof
+that the program is correct. For example, let's say you've implemented a list
+sorting function, the specification typically then is that the output of the
+sorting function is ordered, i.e. for any index $i$ in your output list the
+element at that index must be smaller or equal to the element at index $i + 1$.
 Formally proving that a program is correct with respect to a specification is
 often as much work as writing the program in the first place, so merely testing
 it can often be a sweet spot where you get some confidence that the
 specification is correct, without having to do the proving work. For example in
 the sorting example you can simply generate a random input list and then compare
 the output of your sorting function with the one in the standard library (which
-is likely to be correct).
-
-As programs get more complicted the ratio of effort saved by merely testing, as
-opposed to proving, increases. In fact for bigger programs the effort involved
-in proving correctness is simply too high for it to be practical (this is an
-active area of research). Given all this, I hope you can at least start to see
-why this idea excited John.
+is likely to be correct). As programs get more complicted the ratio of effort
+saved by merely testing, as opposed to proving, increases. In fact for bigger
+programs the effort involved in proving correctness is simply too high for it to
+be practical (this is an active area of research). Given all this, I hope that
+you can start to see why this idea excited John.
 
 While John was working on this idea, Koen Claessen, another member of the
 Functional Programing group, [stuck his
 head](https://youtu.be/x4BNj7mVTkw?t=289) into John's office and asked what he
-was doing. Koen too quickly got excited and came back the next day with his
-improved version of John's code. There was some things that Koen hadn't thought
-about, so John iterated on his code and so it went back and forth for a week
-until the first implementation of property-based testing was written and not
-long after they publised the paper [*QuickCheck: A Lightweight Tool for Random
+was doing. Koen got excited as well and came back the next day with his improved
+version of John's code. There was some things that Koen hadn't thought about, so
+John iterated on his code and so it went back and forth for a week until the
+first implementation of property-based testing was written and not long
+afterwards they publised the paper [*QuickCheck: A Lightweight Tool for Random
 Testing of Haskell
 Programs*](https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf)
-(ICFP 2000).
-
-I think it's worth stressing the *lightweight tool* part from the paper's title,
-the complete source code for the [first
+(ICFP 2000). I think it's worth stressing the *lightweight tool* part from the
+paper's title, the complete source code for the [first
 version](https://github.com/Rewbert/quickcheck-v1) of the library is included in
 the appendix of the paper and it's about 300 lines of code.
 
 Haskell and dependently typed programming languages, like Agda, are pure
 functional programming languages, meaning that it's possible at the type-level
-to distinguish whether a function has side-effects or not.
-
-Proofs about functions in Agda, and similar languages, are almost always only
-dealing with pure functions.
-
-Probably as a result of this, the first version of QuickCheck can only test
-pure functions. This shortcoming was rectified in the follow up paper [*Testing
-monadic code with
+to distinguish whether a function has side-effects or not. Proofs about
+functions in Agda, and similar languages, are almost always only dealing with
+pure functions. Probably as a result of this, the first version of QuickCheck
+can only test pure functions. This shortcoming was rectified in the follow up
+paper [*Testing monadic code with
 QuickCheck*](https://www.cse.chalmers.se/~rjmh/Papers/QuickCheckST.ps) (2002) by
-the same authors.
-
-It's an important extension as it allows us to reason about functions that use
-mutable state, file I/O and networking. It also lays the foundation for being
-able to test concurrent programs, as we shall see below.
+the same authors. It's an important extension as it allows us to reason about
+functions that use mutable state, file I/O and networking, etc. It also lays the
+foundation for being able to test concurrent programs, as we shall see below.
 
 Around the same time as the second paper was published (2002), John was applying
 for a major grant at the Swedish Strategic Research Foundation. A part of the
 application process involved pitching in front of a panel of people from
 industry. Some person from [Ericsson](https://en.wikipedia.org/wiki/Ericsson)
-was on this panel and they were interested in QuickCheck. There was also a
-serial entrepreneur on the panel and she encouraged John to start a company, and
-the Ericsson person agreed to be a first customer, and so Quviq AB was founded
-in 2006[^1] by John and Thomas Arts (perhaps somewhat surprisingly, Koen was
-never involved in the company).
+was on the panel and they were interested in QuickCheck. There was also a serial
+entrepreneur on the panel and she encouraged John to start a company, and the
+Ericsson person agreed to be a first customer, and so Quviq AB was founded in
+2006[^1] by John and Thomas Arts (perhaps somewhat surprisingly, Koen was never
+involved in the company).
 
 The first project at Ericsson that Quviq helped out testing was written in
 Erlang. Unlike Haskell, Erlang is not a pure functional programming language and
 on top of that there's concurrency everywhere. So even the second, monadic,
-version of QuickCheck didn't turn out to be ergonomic enough for the job.
-
-This is what motivated the closed source Quviq QuickCheck version written in
-Erlang, first mentioned in the paper [*Testing telecoms software with Quviq
+version of QuickCheck didn't turn out to be ergonomic enough for the job. This
+is what motivated the closed source Quviq QuickCheck version written in Erlang,
+first mentioned in the paper [*Testing telecoms software with Quviq
 QuickCheck*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=b268715b8c0bcebe53db857aa2d7a95fbb5c5dbf)
-(2006).
-
-The main features of the closed source version that, as we shall see, are still
-not found in many open source versions are:
+(2006). The main features of the closed source version that, as we shall see,
+are still not found in many open source versions are:
 
   1. Sequential *stateful* property-based testing using a state machine model;
   2. *Parallel* testing with race condition detection by reusing the sequential
     state machine model.
 
-We shall describe how these features work in detail later.
-
-For now let's just note that *stateful* testing in its current form was first
-mentioned in [*QuickCheck testing for fun and
+We shall describe how these features work in detail later. For now let's just
+note that *stateful* testing in its current form was first mentioned in
+[*QuickCheck testing for fun and
 profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
 (2007). This paper also mentions that it took John four iterations to get the
 stateful testing design right, so while the 2006 paper already does mention
@@ -166,11 +150,9 @@ reusing the same sequential state machine model combined with linearisability to
 achieve *parallel* testing.
 
 Next let's survey the most commonly used property-based testing libraries to see
-how well supported these two testing features are.
-
-Let me be clear up front that I've not used all of these libraries. My
-understanding comes from reading the documentation, issue tracker and sometimes
-source code.
+how well supported these two testing features are. Let me be clear up front that
+I've not used all of these libraries. My understanding comes from reading the
+documentation, issue tracker and sometimes source code.
 
 To my best knowledge, as of April 2024, the following table summarises the
 situation. Please open an
@@ -211,14 +193,12 @@ important omission.
 ## Analysis
 
 By now I hope that I've managed to convince you that most property-based testing
-libraries do not implement what used to be the state-of-the-art in 2009.
+libraries do not implement what used to be the state-of-the-art fifteen years
+ago.
 
-Many lack stateful testing via state machines (2007) and most lack parallel
-testing support (2009).
-
-Often users of the libraries have opened tickets asking for these features,
-often these tickets have stayed open for years without any progress.
-
+Many libraries lack stateful testing via state machines and most lack parallel
+testing support. Often users of the libraries have opened tickets asking for
+these features, but the tickets have stayed open for years without any progress.
 Furthermore it's not clear to me whether all libraries that support stateful
 testing can be generalised to parallel testing without a substantial redesign of
 their APIs. I don't think there's a single example of a library to which
@@ -230,7 +210,7 @@ Here are three reasons I've heard from John:
 
 1. The stateful and parallel testing featurs are not as useful as testing pure
    functions. This is what John told me when I asked him why these features
-   haven't taken off in Haskell (BobKonf 2017);
+   haven't taken off in the context of Haskell (BobKonf 2017);
 
 2. The state machine models that one needs to write for the stateful and
    parallel testing require a different way of thinking compared to normal
@@ -265,43 +245,56 @@ and education on one hand and running a company that sells licenses, training
 and consulting on the other.
 
 Let me be clear that I've the utmost respect for John, and I believe what he
-says to be true and I believe he acts with the best intentions.
+says to be true and I believe he acts with the best intentions. Having said that
+let me try to address John's points.
 
-I do agree that separating pure from side-effectful code is certainly good
-practice in any programming language and that you can get far by merely
-property-based testing those pure fragments. However I also do think that
-stateful and parallel testing is almost equally important for many non-trivial
-software systems. Most systems in industry will have some database, stateful
-protocol or use concurrent datastructures, which all benefit from these
-features.
+#### Stateful and parallel testing isn't as useful as pure testing
+
+I think many people will agree that separating pure from side-effectful code is
+good practice in any programming language, and I do agree with John that you can
+get far by merely property-based testing those pure fragments.
+
+However I also think that stateful and parallel testing is almost equally
+important for many non-trivial software systems. Most systems in industry will
+have some database, stateful protocol or use concurrent data structures, which
+all benefit from the stateful and parallel testing features.
+
+#### Stateful modelling requires training
 
 Regarding formal specification requiring a special way of thinking and therefor
-training, I believe this is a correct assessment, but I also believe that this is
-already true for property-based testing of pure functions.
+training, I believe this is a correct assessment. However I also believe that
+this is already true for property-based testing of pure functions.
+
+A non-trained user of pure QuickCheck will likely test less interesting
+properties than someone who's trained.
+
+
+Given that John has written
+[papers](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf)
+and given [talks](https://www.youtube.com/watch?v=NcJOiQlzlXQ) on the topic of
+making property-based testing of pure functions more accessible to programmers,
+one might wonder why we cannot do the same for stateful and parallel testing?
+
+The experience reports, that we've mentioned above, usually contain some novelty
+(which warrents publishing a new paper) rather than general advice which can be
+done with the vanilla stateful and parallel testing features.
+
+
+Stateful specifications are not necessarily always more difficult than
+specifications for pure functions, as we shall see later.
+
 
 Formal specification and proofs are fundamental to computer science and have
 occupied minds since [Alan
 Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
 (1949). Property-based testing gives us an execellent opportunity to introduce
-formal specification to a lot of programmers without the formal proof part.
+formal specification to a lot of programmers without the tedious and laborious
+formal proof part, we should cherish such eduction opportunities.
 
-John has written papers and given talks on the topic of making property-based
-testing of pure functions more accessible to programmers:
+Besides, all the open issues seem to suggest that at least some users are
+interested in learning more.
 
-* [*How to specify it! A Guide to Writing Properties of Pure
-  Functions*](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf)
-  (2020)
-
-* [Building on developers' intuitions to create effective property-based
-  tests](https://www.youtube.com/watch?v=NcJOiQlzlXQ) (2019)
-
-Can we do the same for stateful and parallel testing? I think stateful
-specifications are not necessarily always harder than specifications for pure
-functions.
-
-The experience reports that we've already mentioned above, usually contain some
-novelty (which warrents a new paper) rather than general advice which can be
-done with the vanilla stateful and parallel testing features.
+#### Closed source helps industry adoption
 
 Regarding keeping the source closed helping with adoption, I think this is
 perhaps the most controversial point that John makes.
@@ -325,6 +318,8 @@ open source is today, unless you are a big company (which takes more than it
 gives back), it's definitely not clear that it would have worked (and it was
 probably even worse back in 2006).
 
+### What can we do about it?
+
 So here we are 15-18 years after the first papers that introduced stateful and
 parallel testing, dispite the best efforts of everyone involved, and we still
 don't have these features in most property-based testing libraries, even though
@@ -341,7 +336,6 @@ layer or API that you have to learn, but from this sequential model we can
 derive parallel tests by adding two lines of code. Can't blame them when only
 4/27 libraries show how to do this.
 
-### What can we do about it?
 
 Even if John is right and that keeping it closed source has helped adoption in
 industry, it has not helped open source adoption. Or perhaps rather, it's
@@ -372,6 +366,8 @@ as follows:
 
   3. make specifications simpler using fakes, and put this technique in context
      of software development at large.
+
+  4. examples
 
 Before we get started with stateful testing, let's first recap what vanilla
 (stateless) property-based testing does.
@@ -656,7 +652,7 @@ instance StateModel State where
 
 prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do
-  _ <- runCommands cmds
+  runCommands cmds
   assert True
 ```
 
@@ -1012,6 +1008,8 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 * Fake instead of state machine spec is not only easier for programmers
   unfamilar with formal specification, it's also more useful in that the fake
   can be used in integration tests with components that depend on the SUT
+
+* let this be your prototype
 
 * https://martinfowler.com/bliki/ContractTest.html
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
