@@ -108,7 +108,7 @@ allNames = ["a", "b", "c", "d", "e"]
 prop_registry :: Commands RegState -> Property
 prop_registry cmds = monadicIO $ do
   runCommands cmds
-  _ <- run cleanUp
+  void (run cleanUp)
   assert True
 
 cleanUp :: IO [Either ErrorCall ()]
@@ -117,6 +117,7 @@ cleanUp = sequence
   | name <- allNames
   ]
 
+-- XXX: Not used.
 kill :: ThreadId -> IO ()
 kill tid = do
   killThread tid

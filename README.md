@@ -263,11 +263,9 @@ all benefit from the stateful and parallel testing features.
 
 Regarding formal specification requiring a special way of thinking and therefor
 training, I believe this is a correct assessment. However I also believe that
-this is already true for property-based testing of pure functions.
-
-A non-trained user of pure QuickCheck will likely test less interesting
-properties than someone who's trained.
-
+this is already true for property-based testing of pure functions. A non-trained
+user of pure QuickCheck will likely test less interesting properties than
+someone who's trained.
 
 Given that John has written
 [papers](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf)
@@ -797,6 +795,8 @@ Typically debugging buggy concurrent code is not fun. The main reason for this
 is that the threads interleave in different ways between executions, making it
 hard to reproduce the bug.
 
+* Heisenbug
+
 By generating tests, running the same tests many times and shrinking them,
 parallel property-based testing tries to make it slightly less burdensome on the
 programmer.
@@ -970,14 +970,22 @@ the model then the history doesn't linearise and we have found a problem.
 
 #### Prior work
 
-* PropEr
-* qsm
+The following resources where useful when me and my then colleague, Daniel
+Gustafsson, first implemented parallel property-based testing in
+[`quickcheck-state-machine`](https://github.com/stevana/quickcheck-state-machine/tree/master)
+back in 2017.
+
+Apart from the [*Finding Race Conditions in Erlang with QuickCheck and
+PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+(2009) paper and the [*Linearizability: a correctness condition for concurrent
+objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990) paper
+that they reference, it was useful to have a look at the Erlang's PropEr
+library, which is a (the first?) Quviq QuickCheck clone with support for both
+stateful and parallel testing.
 
 * Not property-based testing per say, but similar in that it generates random
-  commands and checks linearisability is Jepsen's Knossos
-
-* Linearizability paper
-* Erlang
+  commands and checks linearisability is Jepsen's
+  [Knossos](https://aphyr.com/posts/309-knossos-redis-and-linearizability)
 
 #### Implementation
 
@@ -987,13 +995,15 @@ the model then the history doesn't linearise and we have found a problem.
 
 ##### Parallel running
 
+#### Example: parallel counter
+
 #### Example: ticket dispenser
 
 [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014)
 
-#### Example: process registry
+#### Example: parallel process registry
 
 The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
