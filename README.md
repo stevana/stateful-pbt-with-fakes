@@ -323,7 +323,7 @@ probably even worse back in 2006).
 So here we are 15-18 years after the first papers that introduced stateful and
 parallel testing, dispite the best efforts of everyone involved, and we still
 don't have these features in most property-based testing libraries, even though
-these features are clearly useful.
+these features are clearly useful and wanted.
 
 Personally I got quite sad when I saw that stateful testing was
 [called](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
