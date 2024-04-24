@@ -21,9 +21,9 @@ tests = testGroup "Tests"
   , testProperty "ParallelCounter" (expectFailure prop_parallelCounter)
   , testProperty "Queue" prop_queue
   , testProperty "DieHard" (expectFailure prop_dieHard)
-  , testProperty "RegistrySeq" prop_registrySeq
-  , testProperty "RegistryPar" prop_registryPar
-  , testProperty "TicketDispenserSeq" prop_ticketDispenserSeq
-  , testProperty "TicketDispenserPar" (expectFailure prop_ticketDispenserPar)
+  , testProperty "Registry" prop_registry
+  , testProperty "ParallelRegistry" prop_parallelRegistry
+  , testProperty "TicketDispenser" prop_ticketDispenser
+  , testProperty "ParallelTicketDispenser" (expectFailure prop_parallelTicketDispenser)
   , testProperty "FileSystem" prop_fileSystem
   ]

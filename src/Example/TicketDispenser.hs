@@ -77,13 +77,13 @@ instance StateModel State where
   runReal (Reset ref) = Reset_ <$> writeIORef (unOpaque ref) 0
 
 
-prop_ticketDispenserSeq :: Commands State -> Property
-prop_ticketDispenserSeq cmds = monadicIO $ do
+prop_ticketDispenser :: Commands State -> Property
+prop_ticketDispenser cmds = monadicIO $ do
   runCommands cmds
   assert True
 
-prop_ticketDispenserPar :: ParallelCommands State -> Property
-prop_ticketDispenserPar cmds = monadicIO $ do
+prop_parallelTicketDispenser :: ParallelCommands State -> Property
+prop_parallelTicketDispenser cmds = monadicIO $ do
   replicateM_ 10 $
     runParallelCommands cmds
   assert True

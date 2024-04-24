@@ -105,8 +105,8 @@ arbitraryName = elements allNames
 allNames :: [String]
 allNames = ["a", "b", "c", "d", "e"]
 
-prop_registrySeq :: Commands RegState -> Property
-prop_registrySeq cmds = monadicIO $ do
+prop_registry :: Commands RegState -> Property
+prop_registry cmds = monadicIO $ do
   runCommands cmds
   _ <- run cleanUp
   assert True
@@ -122,8 +122,8 @@ kill tid = do
   killThread tid
   yield
 
-prop_registryPar :: ParallelCommands RegState -> Property
-prop_registryPar cmds = monadicIO $ do
+prop_parallelRegistry :: ParallelCommands RegState -> Property
+prop_parallelRegistry cmds = monadicIO $ do
   replicateM_ 10 $ do
     runParallelCommands cmds
     void (run cleanUp)
