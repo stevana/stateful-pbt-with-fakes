@@ -264,8 +264,8 @@ all benefit from the stateful and parallel testing features.
 Regarding formal specification requiring a special way of thinking and therefor
 training, I believe this is a correct assessment. However I also believe that
 this is already true for property-based testing of pure functions. A non-trained
-user of pure QuickCheck will likely test less interesting properties than
-someone who's trained.
+user of pure property-based testing will likely test less interesting properties
+than someone who's trained.
 
 Given that John has written
 [papers](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf)
@@ -275,22 +275,24 @@ one might wonder why we cannot do the same for stateful and parallel testing?
 
 The experience reports, that we've mentioned above, usually contain some novelty
 (which warrents publishing a new paper) rather than general advice which can be
-done with the vanilla stateful and parallel testing features.
+done with the vanilla stateful and parallel testing features. Furthermore they
+require buying a Quviq license in order to reproduce the results, a show stopper
+for many people.
 
-
-Stateful specifications are not necessarily always more difficult than
-specifications for pure functions, as we shall see later.
-
-
-Formal specification and proofs are fundamental to computer science and have
-occupied minds since [Alan
-Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
-(1949). Property-based testing gives us an execellent opportunity to introduce
-formal specification to a lot of programmers without the tedious and laborious
-formal proof part, we should cherish such eduction opportunities.
-
-Besides, all the open issues seem to suggest that at least some users are
-interested in learning more.
+I think it's also worth stressing that stateful specifications are not
+necessarily always more difficult than specifications for pure functions. For
+example, to model a key-value store one can get quite far with the model being a
+list of key-value pairs. In fact a simple model like that managed to find a 17
+step (shrunk) counterexample in LevelDB to a known
+[issue](https://github.com/google/leveldb/issues/50), within mere minutes. It
+took weeks for Google to provide a fix, and then after running the property
+again on the fixed code a new 31 step counterexample was found within minutes.
+Turns out there was a bug in the background compaction process. The compaction
+process improves read performance and reclaims disk space, which is important
+for a key-value store, but interestingly it's not explicitly part of the model.
+Joseph W Norton gave a
+[talk](https://htmlpreview.github.io/?https://raw.githubusercontent.com/strangeloop/lambdajam2013/master/slides/Norton-QuickCheck.html)
+at LambdaJam 2013 about it.
 
 #### Closed source helps industry adoption
 
@@ -1052,6 +1054,14 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
     + Jepsen's knossos checker
   - Simulation testing
     + Always and sometimes combinators?
+
+Formal specification and proofs are fundamental to computer science and have
+occupied minds since [Alan
+Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
+(1949). Property-based testing gives us an execellent opportunity to introduce
+formal specification to a lot of programmers without the tedious and laborious
+formal proof part, we should cherish such eduction opportunities.
+
 
 
 [^1]: Is there a source for this story? I can't remember where I've heard it.
