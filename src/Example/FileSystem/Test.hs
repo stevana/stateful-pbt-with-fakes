@@ -6,6 +6,8 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Example.FileSystem.Test where
 
 import Control.Monad
@@ -21,12 +23,12 @@ import Stateful
 
 ------------------------------------------------------------------------
 
-newtype State = State { unState :: Mock }
-  deriving Show
+instance StateModel FakeFS where
 
-instance StateModel State where
+  initialState :: FakeFS
+  initialState = emptyFakeFS
 
-  data Command State h
+  data Command FakeFS h
     = MkDir Dir
     | Open  File
     | Write h String
@@ -34,7 +36,7 @@ instance StateModel State where
     | Read  File
     deriving (Eq, Show, Functor)
 
-  data Response State h
+  data Response FakeFS h
     = MkDir_ ()
     | Open_ h
     | Write_ ()
@@ -42,19 +44,19 @@ instance StateModel State where
     | Read_ String
     deriving (Eq, Show, Functor, Foldable)
 
-  type Reference State = Handle
+  type Reference FakeFS = Handle
 
-  type Failure State = Err
+  type PreconditionFailure FakeFS = Err
 
-  type CommandMonad State = IO
+  type CommandMonad FakeFS = IO
 
-  generateCommand :: State -> Gen (Command State (Var Handle))
-  generateCommand (State s) = oneof $ concat
+  generateCommand :: FakeFS -> Gen (Command FakeFS FHandle)
+  generateCommand s = oneof $ concat
     [ withoutHandle
     , if null (Map.keys (open s)) then [] else withHandle
     ]
     where
-      withoutHandle :: [Gen (Command State (Var Handle))]
+      withoutHandle :: [Gen (Command FakeFS FHandle)]
       withoutHandle =
         [ MkDir <$> genDir
         , Open <$> genFile
@@ -63,20 +65,20 @@ instance StateModel State where
         -- ] ++ [ Open <$> genFile | null (Map.keys (open s)) ] ++
         , Read <$> if null (Map.keys (files s))
                    then genFile
-                   else genWrittenFile s
+                   else genWrittenFile
         ]
 
-      withHandle :: [Gen (Command State (Var Handle))]
+      withHandle :: [Gen (Command FakeFS FHandle)]
       withHandle =
-        [ Write <$> genHandle s <*> genString
-        , Close <$> genHandle s
+        [ Write <$> genHandle <*> genString
+        , Close <$> genHandle
         ]
 
-      genHandle :: Mock -> Gen MHandle
-      genHandle mock = Var <$> choose (0, Map.size (open mock) - 1)
+      genHandle :: Gen FHandle
+      genHandle = Var <$> choose (0, Map.size (open s) - 1)
 
-      genWrittenFile :: Mock -> Gen File
-      genWrittenFile mock = elements (Map.keys (files mock))
+      genWrittenFile :: Gen File
+      genWrittenFile = elements (Map.keys (files s))
 
       genDir :: Gen Dir
       genDir = do
@@ -89,27 +91,26 @@ instance StateModel State where
       genString :: Gen String
       genString = sized $ \n -> replicateM n (elements "ABC")
 
-  initialState :: State
-  initialState = State emptyMock
+  runFake (MkDir d)   = assoc MkDir_ . mMkDir d
+  runFake (Open f)    = assoc Open_  . mOpen f
+  runFake (Write h s) = assoc Write_ . mWrite h s
+  runFake (Close h)   = assoc Close_ . mClose h
+  runFake (Read f)    = assoc Read_  . mRead f
 
-  runFake (MkDir d)   = assoc MkDir_ . mMkDir d . unState
-  runFake (Open f)    = assoc Open_  . mOpen f . unState
-  runFake (Write h s) = assoc Write_ . mWrite h s . unState
-  runFake (Close h)   = assoc Close_ . mClose h . unState
-  runFake (Read f)    = assoc Read_  . mRead f . unState
-
-  runReal :: Command State Handle -> IO (Response State Handle)
+  runReal :: Command FakeFS Handle -> IO (Response FakeFS Handle)
   runReal (MkDir d)   = MkDir_ <$> iMkDir (real root) d
   runReal (Open f)    = Open_  <$> iOpen (real root) f
   runReal (Write h s) = Write_ <$> iWrite (real root) h s
   runReal (Close h)   = Close_ <$> iClose (real root) h
   runReal (Read f)    = Read_  <$> iRead (real root) f
 
-  monitoring :: (State, State) -> Command State Handle -> Response State Handle
+  monitoring :: (FakeFS, FakeFS) -> Command FakeFS Handle -> Response FakeFS Handle
              -> Property -> Property
   monitoring (_s, _s') Read {} (Read_ s) = classify (not (null s)) (show SuccessfulRead)
-  monitoring (_s, State s') _cmd _resp =
+  monitoring (_s, s') _cmd _resp =
     classify (length (Map.keys (open s')) >= 2) (show OpenTwo)
+
+  runCommandMonad _ = id
 
 ------------------------------------------------------------------------
 
@@ -119,16 +120,16 @@ data Tag = OpenTwo | SuccessfulRead
 root :: FilePath
 root = "/tmp/qc-test"
 
-assoc :: (a -> Response State (Var Handle)) -> (Either e a, Mock)
-      -> Either e (State, Response State (Var Handle))
+assoc :: (a -> Response FakeFS FHandle) -> (Either e a, FakeFS)
+      -> Either e (FakeFS, Response FakeFS FHandle)
 assoc _f (Left e, _s) = Left e
-assoc f  (Right x, s) = Right (State s, f x)
+assoc f  (Right x, s) = Right (s, f x)
 
 
-prop_fileSystem :: Commands State -> Property
+prop_fileSystem :: Commands FakeFS -> Property
 prop_fileSystem cmds = monadicIO $ do
+  runCommands cmds
   run cleanup
-  _ <- runCommands cmds
   assert True
   where
     cleanup :: IO ()

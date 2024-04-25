@@ -46,7 +46,7 @@ instance StateModel State where
     | Reset_ ()
     deriving (Eq, Show, Functor, Foldable)
 
-  type Failure State = ()
+  type PreconditionFailure State = ()
 
   generateCommand :: State -> Gen (Command State (Var (Reference State)))
   generateCommand NoState   = return New

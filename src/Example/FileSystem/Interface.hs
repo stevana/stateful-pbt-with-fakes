@@ -21,7 +21,7 @@ data IFileSystem h = IFileSystem
 
 ------------------------------------------------------------------------
 
-updateIORef :: IORef Mock -> MockOp a -> IO a
+updateIORef :: IORef FakeFS -> FakeOp a -> IO a
 updateIORef ref op =
   atomicModifyIORef' ref (\mock -> swap (op mock)) >>= \case
     Left err -> throwIO err
@@ -29,9 +29,9 @@ updateIORef ref op =
   where
     swap (x, y) = (y, x)
 
-fake :: IO (IFileSystem MHandle)
+fake :: IO (IFileSystem FHandle)
 fake = do
-  ref <- newIORef emptyMock
+  ref <- newIORef emptyFakeFS
   return IFileSystem
     { iMkDir = \d   -> updateIORef ref (mMkDir d)
     , iOpen  = \f   -> updateIORef ref (mOpen f)

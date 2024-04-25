@@ -55,7 +55,7 @@ instance StateModel RegState where
     , WhereIs <$> arbitraryName
     ]
 
-  type Failure RegState = ()
+  type PreconditionFailure RegState = ()
 
   runFake :: Command RegState (Var ThreadId)-> RegState
           -> Either () (RegState, Response RegState (Var ThreadId))

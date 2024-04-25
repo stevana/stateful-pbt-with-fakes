@@ -7,14 +7,15 @@
 module Example.Counter where
 
 import Control.Concurrent
+import Control.Monad
 import Data.IORef
 import Data.Void
+import System.IO.Unsafe
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
-import System.IO.Unsafe
 
-import Stateful
 import Parallel
+import Stateful
 
 ------------------------------------------------------------------------
 
@@ -22,65 +23,83 @@ gLOBAL_COUNTER :: IORef Int
 gLOBAL_COUNTER = unsafePerformIO (newIORef 0)
 {-# NOINLINE gLOBAL_COUNTER #-}
 
-data Bug = NoBug | Incr42Bug | RaceCondition
+incr :: IO ()
+incr = atomicModifyIORef' gLOBAL_COUNTER (\n -> (n + 1, ()))
 
-bUG :: Bug
-bUG = RaceCondition
+incr42Bug :: IO ()
+incr42Bug = atomicModifyIORef' gLOBAL_COUNTER
+  (\n -> if n == 42 then (n, ()) else (n + 1, ()))
+
+incrRaceCondition :: IO ()
+incrRaceCondition = do
+  n <- readIORef gLOBAL_COUNTER
+  threadDelay 2000
+  writeIORef gLOBAL_COUNTER (n + 1)
+
+get :: IO Int
+get = readIORef gLOBAL_COUNTER
+
+reset :: IO ()
+reset = writeIORef gLOBAL_COUNTER 0
 
 ------------------------------------------------------------------------
 
-data Model = Model Int
+newtype Counter = Counter Int
   deriving (Eq, Show)
 
-instance StateModel Model where
+instance StateModel Counter where
 
-  initialState = Model 0
+  -- We start counting from zero.
+  initialState = Counter 0
 
-  type Reference Model = Void
-
-  data Command Model r
+  -- The commands correspond to the names of the functions that operate on the
+  -- global counter.
+  data Command Counter r
     = Incr
-    | Read
+    | Get
     deriving (Show, Functor)
 
-  data Response Model r
+  -- The responses correspond to the return types of each function. By
+  -- convention we'll add a underscore suffix to a response of the corresponding
+  -- command.
+  data Response Counter r
     = Incr_ ()
-    | Read_ Int
+    | Get_ Int
     deriving (Eq, Show, Functor, Foldable)
 
-  generateCommand :: Model -> Gen (Command Model r)
-  generateCommand _s = elements [Incr, Read]
+  -- We'll generate increments and reads of the counter with equal probability.
+  generateCommand :: Counter -> Gen (Command Counter r)
+  generateCommand _s = elements [Incr, Get]
 
-  runFake :: Command Model r -> Model -> Either Void (Model, Response Model r)
-  runFake Incr   (Model n) = return (Model (n + 1), Incr_ ())
-  runFake Read m@(Model n) = return (m, Read_ n)
+  -- The fake takes a command and the model of the counter and returns a new
+  -- model and a response.
+  runFake :: Command Counter r -> Counter -> Either Void (Counter, Response Counter r)
+  runFake Incr  (Counter n) = return (Counter (n + 1), Incr_ ())
+  runFake Get m@(Counter n) = return (m, Get_ n)
 
-  runReal :: Command Model r -> IO (Response Model r)
-  runReal Read = Read_ <$> readIORef    gLOBAL_COUNTER
-  runReal Incr = Incr_ <$> incr
-    where
-      incr = case bUG of
-        NoBug     -> atomicModifyIORef' gLOBAL_COUNTER (\n -> (n + 1, ()))
-        Incr42Bug -> modifyIORef' gLOBAL_COUNTER
-                       (\n -> if n == 42 then n else n + 1)
-        RaceCondition -> do
-          n <- readIORef gLOBAL_COUNTER
-          threadDelay 2000
-          writeIORef gLOBAL_COUNTER (n + 1)
+  -- We also need to explain to which part of the SUT each command correspond
+  -- to.
+  runReal :: Command Counter r -> IO (Response Counter r)
+  runReal Get  = Get_  <$> get
+  -- runReal Incr = Incr_ <$> incr
+  -- runReal Incr = Incr_ <$> incr42Bug
+  runReal Incr = Incr_ <$> incrRaceCondition
 
+  -- This example has no references.
+  type Reference Counter = Void
+
+  -- The command monad is IO, so we don't need to do anything here.
   runCommandMonad _s = id
 
-prop_counter :: Commands Model -> Property
+prop_counter :: Commands Counter -> Property
 prop_counter cmds = monadicIO $ do
   runCommands cmds
-  resetCounter
+  run reset
   assert True
 
-resetCounter :: PropertyM IO ()
-resetCounter = run (writeIORef gLOBAL_COUNTER 0)
-
-prop_parallelCounter :: ParallelCommands Model -> Property
+prop_parallelCounter :: ParallelCommands Counter -> Property
 prop_parallelCounter cmds = monadicIO $ do
-  runParallelCommands cmds
-  resetCounter
+  replicateM_ 10 $ do
+    runParallelCommands cmds
+    run reset
   assert True

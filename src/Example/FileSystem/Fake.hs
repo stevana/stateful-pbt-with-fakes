@@ -9,11 +9,11 @@ module Example.FileSystem.Fake (
     -- * Errors
   , Err(..)
   , fromIOError
-    -- * Mock file system
-  , MHandle
-  , Mock(..)
-  , MockOp
-  , emptyMock
+    -- * FakeFS file system
+  , FHandle
+  , FakeFS(..)
+  , FakeOp
+  , emptyFakeFS
   , mMkDir
   , mOpen
   , mWrite
@@ -21,17 +21,17 @@ module Example.FileSystem.Fake (
   , mRead
   ) where
 
-import           Control.Exception
-import           Data.Map         (Map)
-import           Data.Set         (Set)
+import Control.Exception
+import Data.Map (Map)
+import Data.Set (Set)
 import qualified GHC.IO.Exception as GHC
-import           System.FilePath  ((</>))
-import           System.IO (Handle)
-import           System.IO.Error
+import System.FilePath ((</>))
+import System.IO (Handle)
+import System.IO.Error
 
 import qualified Data.List as List
-import qualified Data.Map  as Map
-import qualified Data.Set  as Set
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 import Stateful (Var(Var))
 
@@ -77,36 +77,36 @@ fromIOError e =
       _otherwise           -> Nothing
 
 {-------------------------------------------------------------------------------
-  Mock implementation
+  FakeFS implementation
 -------------------------------------------------------------------------------}
 
-type MHandle = Var Handle
+type FHandle = Var Handle
 
-data Mock = M {
+data FakeFS = F {
     dirs  :: Set Dir
   , files :: Map File String
-  , open  :: Map MHandle File
-  , next  :: MHandle
+  , open  :: Map FHandle File
+  , next  :: FHandle
   }
   deriving Show
 
-emptyMock :: Mock
-emptyMock = M (Set.singleton (Dir [])) Map.empty Map.empty (Var 0)
+emptyFakeFS :: FakeFS
+emptyFakeFS = F (Set.singleton (Dir [])) Map.empty Map.empty (Var 0)
 
-type MockOp a = Mock -> (Either Err a, Mock)
+type FakeOp a = FakeFS -> (Either Err a, FakeFS)
 
-mMkDir :: Dir -> MockOp ()
-mMkDir d m@(M ds fs hs n)
+mMkDir :: Dir -> FakeOp ()
+mMkDir d m@(F ds fs hs n)
   | d        `Set.member`    ds = (Left AlreadyExists, m)
   | parent d `Set.notMember` ds = (Left DoesNotExist, m)
-  | otherwise                   = (Right (), M (Set.insert d ds) fs hs n)
+  | otherwise                   = (Right (), F (Set.insert d ds) fs hs n)
 
-mOpen :: File -> MockOp MHandle
-mOpen f m@(M ds fs hs n@(Var n_))
+mOpen :: File -> FakeOp FHandle
+mOpen f m@(F ds fs hs n@(Var n_))
   | alreadyOpen   = (Left Busy, m)
   | not dirExists = (Left DoesNotExist, m)
-  | fileExists    = (Right n, M ds fs hs' n')
-  | otherwise     = (Right n, M ds (Map.insert f "" fs) hs' n')
+  | fileExists    = (Right n, F ds fs hs' n')
+  | otherwise     = (Right n, F ds (Map.insert f "" fs) hs' n')
   where
     hs' = Map.insert n f hs
     n'  = Var (succ n_)
@@ -115,16 +115,16 @@ mOpen f m@(M ds fs hs n@(Var n_))
     dirExists   = fileDir f `Set.member` ds
     alreadyOpen = f `List.elem` Map.elems hs
 
-mWrite :: MHandle -> String -> MockOp ()
-mWrite h s m@(M ds fs hs n)
-  | Just f <- Map.lookup h hs = (Right (), M ds (Map.adjust (++ s) f fs) hs n)
+mWrite :: FHandle -> String -> FakeOp ()
+mWrite h s m@(F ds fs hs n)
+  | Just f <- Map.lookup h hs = (Right (), F ds (Map.adjust (++ s) f fs) hs n)
   | otherwise                 = (Left HandleClosed, m)
 
-mClose :: MHandle -> MockOp ()
-mClose h (M ds fs hs n) = (Right (), M ds fs (Map.delete h hs) n)
+mClose :: FHandle -> FakeOp ()
+mClose h (F ds fs hs n) = (Right (), F ds fs (Map.delete h hs) n)
 
-mRead :: File -> MockOp String
-mRead f m@(M _ fs hs _)
+mRead :: File -> FakeOp String
+mRead f m@(F _ fs hs _)
   | alreadyOpen               = (Left Busy         , m)
   | Just s <- Map.lookup f fs = (Right s           , m)
   | otherwise                 = (Left DoesNotExist , m)

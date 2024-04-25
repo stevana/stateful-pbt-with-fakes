@@ -24,7 +24,7 @@ instance StateModel State where
 
   type Reference State = Queue
 
-  type Failure State = Err
+  type PreconditionFailure State = Err
 
   data Command State q
     = New Int

@@ -33,7 +33,7 @@ class ( Monad (CommandMonad state)
       , Show (Response state (Reference state))
       , Show (Response state (Var (Reference state)))
       , Show (Reference state)
-      , Show (Failure state)
+      , Show (PreconditionFailure state)
       , Typeable (Reference state)
       , Typeable state
       ) => StateModel state where
@@ -43,8 +43,8 @@ class ( Monad (CommandMonad state)
 
   type Reference state :: Type
 
-  type Failure state :: Type
-  type Failure state = Void
+  type PreconditionFailure state :: Type
+  type PreconditionFailure state = Void
 
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
@@ -58,7 +58,8 @@ class ( Monad (CommandMonad state)
   initialState :: state
 
   runFake :: Command state (Var (Reference state)) -> state
-          -> Either (Failure state) (state, Response state (Var (Reference state)))
+          -> Either (PreconditionFailure state)
+                    (state, Response state (Var (Reference state)))
 
   runReal :: Command state (Reference state)
           -> CommandMonad state (Response state (Reference state))

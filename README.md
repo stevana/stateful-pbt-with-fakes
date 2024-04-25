@@ -301,8 +301,8 @@ perhaps the most controversial point that John makes.
 
 If we try to see it from John's perspective, how else would an academic get
 funding to work on tooling (which typically isn't reconginised as doing
-research), feedback from industry, or be able to hire people? Surely, one cannot
-expect research funding agencies to pay for this?
+research), or feedback from industry? Surely, one cannot expect research funding
+agencies to pay for this?
 
 On the other hand one could ask why there isn't a requirement that published
 research should be reproducable using open source tools (or at least tools that
@@ -318,12 +318,21 @@ open source is today, unless you are a big company (which takes more than it
 gives back), it's definitely not clear that it would have worked (and it was
 probably even worse back in 2006).
 
+Even if John is right and that keeping it closed source has helped adoption in
+industry, I think it's by now fair to say it has not helped open source
+adoption.
+
+Or perhaps rather, it's unlikely that a company that pays for a
+licence in Erlang would then go and port the library in another language.
+
 ### What can we do about it?
 
-So here we are 15-18 years after the first papers that introduced stateful and
-parallel testing, dispite the best efforts of everyone involved, and we still
-don't have these features in most property-based testing libraries, even though
-these features are clearly useful and wanted.
+So here we are, about fifteen years after the first papers that introduced
+stateful and parallel testing, dispite the best efforts of everyone involved,
+and we still don't have these features in most property-based testing libraries,
+even though these features are useful and wanted.
+
+
 
 Personally I got quite sad when I saw that stateful testing was
 [called](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
@@ -335,12 +344,6 @@ benefits of parallel testing. While it's true that stateful testing adds another
 layer or API that you have to learn, but from this sequential model we can
 derive parallel tests by adding two lines of code. Can't blame them when only
 4/27 libraries show how to do this.
-
-
-Even if John is right and that keeping it closed source has helped adoption in
-industry, it has not helped open source adoption. Or perhaps rather, it's
-unlikely that a company that pays for a licence in Erlang would then go and port
-the library in another language.
 
 I like to think that part of the original QuickCheck library's success in
 spreading to so many other languages can be attributed to the fact that it is
@@ -384,9 +387,7 @@ and the relation can be anything we'd like to hold for our list reversal
 function, for example we can specify that reversing the result of rerversal
 gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
 
-Before we get into how to apply property-based testing (PBT) to stateful
-systems, lets recall what PBT of pure programs looks like. Here are a few
-typical examples:
+Here are a few other typical examples:
 
 - `forall (xs : List Int). reverse (reverse xs) == xs`
 - `forall (i : Input). deserialise (serialise i) == i`
@@ -424,7 +425,7 @@ how it works at a high-level and what my sources of inspiration are.
 #### Motivation
 
 In order to explain why stateful property-based testing is needed, it's perhaps
-helpful to have a look at how it's different from vanilla property-based testing.
+helpful to have a look at how it's different from pure property-based testing.
 
 A pure, or side-effect free, function always returns the same output if given
 the same input. This isn't true for a stateful function or component.
@@ -519,6 +520,152 @@ the real component and the model as well as checking that they conform.
 
 #### Example: counter
 
+##### SUT
+
+They don't teach you this in school, but this is how you can implement global
+mutable variables in Haskell:
+
+```haskell
+gLOBAL_COUNTER :: IORef Int
+gLOBAL_COUNTER = unsafePerformIO (newIORef 0)
+{-# NOINLINE gLOBAL_COUNTER #-}
+
+incr :: IO ()
+incr = atomicModifyIORef' gLOBAL_COUNTER (\n -> (n + 1, ()))
+
+get :: IO Int
+get = readIORef gLOBAL_COUNTER
+```
+
+The reason it's not taught is because global state easily leads to a mess, but
+in our case it provides the minimal possible example of a stateful system.
+
+##### Model
+
+To model our counter, we'll implement a fake of a counter using an integer.
+
+```haskell
+newtype Counter = Counter Int
+  deriving (Eq, Show)
+
+instance StateModel Counter where
+
+  -- We start counting from zero.
+  initialState = Counter 0
+
+  -- The commands correspond to the names of the functions that operate on the
+  -- global counter.
+  data Command Counter r
+    = Incr
+    | Get
+    deriving (Show, Functor)
+
+  -- The responses correspond to the return types of each function. By
+  -- convention we'll add a underscore suffix to a response of the corresponding
+  -- command.
+  data Response Counter r
+    = Incr_ ()
+    | Get_ Int
+    deriving (Eq, Show, Functor, Foldable)
+
+  -- We'll generate increments and reads of the counter with equal probability.
+  generateCommand :: Counter -> Gen (Command Counter r)
+  generateCommand _s = elements [Incr, Get]
+
+  -- The fake takes a command and the model of the counter and returns a new
+  -- model and a response.
+  runFake :: Command Counter r -> Counter -> Either Void (Counter, Response Counter r)
+  runFake Incr  (Counter n) = return (Counter (n + 1), Incr_ ())
+  runFake Get m@(Counter n) = return (m, Get_ n)
+
+  -- We also need to explain to which part of the SUT each command correspond
+  -- to.
+  runReal :: Command Counter r -> IO (Response Counter r)
+  runReal Get  = Get_  <$> get
+  runReal Incr = Incr_ <$> incr
+```
+
+##### Tests
+
+```haskell
+prop_counter :: Commands Counter -> Property
+prop_counter cmds = monadicIO $ do
+  runCommands cmds
+  run reset
+  assert True
+```
+
+```haskell
+reset :: IO ()
+reset = writeIORef gLOBAL_COUNTER 0
+```
+
+To make things a bit more interesting
+
+```haskell
+incr42Bug :: IO ()
+incr42Bug = atomicModifyIORef' gLOBAL_COUNTER
+  (\n -> if n == 42 then (n, ()) else (n + 1, ()))
+```
+
+
+```diff
+  - runReal Incr = Incr_ <$> incr
+  + runReal Incr = Incr_ <$> incr42Bug
+```
+
+```
+*** Failed! Assertion failed (after 66 tests and 29 shrinks):
+    Commands [Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Incr,Get]
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Incr --> Incr_ ()
+    Get --> Get_ 42
+
+    Expected: Get_ 43
+    Got: Get_ 42
+```
+
 #### Example: array-based queue
 
 The queue example from [*Testing the hard stuff and staying
@@ -560,100 +707,11 @@ int size(Queue *q) {
 ##### Model / fake
 
 ```haskell
-type State = Map (Var Queue) FQueue
-
-data FQueue = FQueue
-  { fqElems :: [Int]
-  , fqSize  :: Int
-  }
-  deriving Show
-
-data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
-  deriving (Eq, Show)
-
-fnew :: Int -> State -> Return Err (State, Var Queue)
-fnew sz s =
-  let
-    v = Var (Map.size s)
-  in
-    return (Map.insert v (FQueue [] sz) s, v)
-
-fput :: Var Queue -> Int -> State -> Return Err (State, ())
-fput q i s
-  | q `Map.notMember` s = Precondition QueueDoesNotExist
-  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Precondition QueueIsFull
-  | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
-
-fget :: Var Queue -> State -> Return Err (State, Int)
-fget q s
-  | q `Map.notMember` s        = Precondition QueueDoesNotExist
-  | null (fqElems (s Map.! q)) = Precondition QueueIsEmpty
-  | otherwise = case fqElems (s Map.! q) of
-      [] -> error "fget: impossible, we checked that it's non-empty"
-      i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
-
-fsize :: Var Queue -> State -> Return Err (State, Int)
-fsize q s
-  | q `Map.notMember` s = Precondition QueueDoesNotExist
-  | otherwise           = return (s, length (fqElems (s Map.! q)))
 ```
 
 ##### Testing
 
 ```haskell
-instance StateModel State where
-
-  initialState = Map.empty
-
-  type Reference State = Queue
-  type Failure State = Err
-
-  data Command State q
-    = New Int
-    | Put q Int
-    | Get q
-    | Size q
-    deriving (Show, Functor)
-
-  data Response State q
-    = New_ q
-    | Put_ ()
-    | Get_ Int
-    | Size_ Int
-    deriving (Eq, Show, Functor, Foldable)
-
-  generateCommand s
-    | Map.null s = New . getPositive <$> arbitrary
-    | otherwise  = oneof
-      [ New . getPositive <$> arbitrary
-      , Put  <$> arbitraryQueue <*> arbitrary
-      , Get  <$> arbitraryQueue
-      , Size <$> arbitraryQueue
-      ]
-    where
-      arbitraryQueue :: Gen (Var Queue)
-      arbitraryQueue = Var <$> choose (0, Map.size s - 1)
-
-  shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
-  shrinkCommand _s _cmd = []
-
-  runFake (New sz)  s = fmap New_  <$> fnew sz s
-  runFake (Put q i) s = fmap Put_  <$> fput q i s
-  runFake (Get q)   s = fmap Get_  <$> fget q s
-  runFake (Size q)  s = fmap Size_ <$> fsize q s
-
-  -- These are FFI bindings that call the C code.
-  runReal (New sz)  = New_  <$> new sz
-  runReal (Put q i) = Put_  <$> put q i
-  runReal (Get q)   = Get_  <$> get q
-  runReal (Size q)  = Size_ <$> size q
-
-  runCommandMonad _ = id
-
-prop_queue :: Commands State -> Property
-prop_queue cmds = monadicIO $ do
-  runCommands cmds
-  assert True
 ```
 
 + regression tests?
@@ -999,11 +1057,17 @@ stateful and parallel testing.
 
 #### Example: parallel counter
 
+```haskell
+```
+
 #### Example: ticket dispenser
 
 [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014)
+
+```haskell
+```
 
 #### Example: parallel process registry
 
@@ -1011,6 +1075,9 @@ The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (2009)
+
+```haskell
+```
 
 ### Integration testing with contract tested fakes
 
