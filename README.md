@@ -513,12 +513,176 @@ the real component and the model as well as checking that they conform.
 
 ##### Stateful testing interface
 
-* Trait, type class, protocol type, module signatures
+```haskell
+class ( Monad (CommandMonad state)
+      , MonadIO (CommandMonad state)
+      , MonadCatch (CommandMonad state)
+      , Functor (Command state)
+      , Functor (Response state)
+      , Foldable (Response state)
+      , Eq (Response state (Reference state))
+      , Show state
+      , Show (Command state (Var (Reference state)))
+      , Show (Response state (Reference state))
+      , Show (Response state (Var (Reference state)))
+      , Show (Reference state)
+      , Show (PreconditionFailure state)
+      , Typeable (Reference state)
+      , Typeable state
+      ) => StateModel state where
+
+  data Command  state :: Type -> Type
+  data Response state :: Type -> Type
+
+  type Reference state :: Type
+
+  type PreconditionFailure state :: Type
+  type PreconditionFailure state = Void
+
+  type CommandMonad state :: Type -> Type
+  type CommandMonad state = IO
+
+  generateCommand :: state -> Gen (Command state (Var (Reference state)))
+
+  shrinkCommand :: state -> Command state (Var (Reference state))
+                -> [Command state (Var (Reference state))]
+  shrinkCommand _state _cmd = []
+
+  initialState :: state
+
+  runFake :: Command state (Var (Reference state)) -> state
+          -> Either (PreconditionFailure state)
+                    (state, Response state (Var (Reference state)))
+
+  runReal :: Command state (Reference state)
+          -> CommandMonad state (Response state (Reference state))
+
+  monitoring :: (state, state)
+             -> Command state (Reference state)
+             -> Response state (Reference state)
+             -> Property -> Property
+  monitoring _states _cmd _resp = id
+
+  commandName :: (Show (Command state ref), Show ref)
+              => Command state ref -> String
+  commandName = head . words . show
+
+  -- XXX: needed for parallel
+  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
+```
+
 
 ##### Generating and shrinking
+
+```haskell
+newtype Commands state = Commands [Command state (Var (Reference state))]
+deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
+
+precondition :: StateModel state
+             => state -> Command state (Var (Reference state)) -> Bool
+precondition s cmd = case runFake cmd s of
+  Left _  -> False
+  Right _ -> True
+
+nextState :: StateModel state
+          => state -> Command state (Var (Reference state)) -> state
+nextState s cmd = case runFake cmd s of
+  Right (s', _) -> s'
+  Left _err -> error "nextState: impossible, we checked for success in precondition"
+
+instance StateModel state => Arbitrary (Commands state) where
+
+  arbitrary :: Gen (Commands state)
+  arbitrary = Commands <$> genCommands initialState
+    where
+      genCommands :: StateModel state
+                  => state -> Gen [Command state (Var (Reference state))]
+      genCommands s = sized $ \n ->
+        let
+          w = n `div` 2 + 1
+        in
+          frequency
+            [ (1, return [])
+            , (w, do mcmd <- generateCommand s `suchThatMaybe` precondition s
+                     case mcmd of
+                       Nothing  -> return []
+                       Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
+            ]
+
+  shrink :: Commands state -> [Commands state]
+  shrink (Commands cmds) =
+    map (Commands . prune . map fst)
+        (shrinkList shrinker (snd (withStates initialState cmds)))
+    where
+      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+
+withStates :: StateModel state
+           => state -> [Command state (Var (Reference state))]
+           -> (state, [(Command state (Var (Reference state)), state)])
+withStates s0 = go s0 []
+  where
+    go s acc []           = (s, reverse acc)
+    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
+
+prune :: StateModel state
+      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
+prune = go initialState
+  where
+    go _s [] = []
+    go  s (cmd : cmds)
+      | precondition s cmd = cmd : go (nextState s cmd) cmds
+      | otherwise          = go s cmds
+```
+
 ##### Running and assertion checking
 
+```haskell
+runCommands :: forall state. StateModel state
+            => Commands state -> PropertyM (CommandMonad state) ()
+runCommands (Commands cmds0) = go initialState [] cmds0
+  where
+    go :: state -> [(Int, Dynamic)] -> [Command state (Var (Reference state))]
+       -> PropertyM (CommandMonad state) ()
+    go _state _vars [] = return ()
+    go  state  vars (cmd : cmds) = do
+      case runFake cmd state of
+        Left _err -> pre False
+        Right (state', resp) -> do
+          let name = commandName cmd
+          monitor (tabulate "Commands" [name] . classify True name)
+          let ccmd = fmap (sub vars) cmd
+          cresp <- run (runReal ccmd)
+          monitor (counterexample (show cmd ++ " --> " ++ show cresp))
+          monitor (monitoring (state, state') ccmd cresp)
+          let refs   = toList cresp
+              vars'  = vars ++ zip [length vars..] (map toDyn refs)
+              cresp' = fmap (sub vars') resp
+              ok     = cresp == cresp'
+          unless ok $
+            monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
+          assert ok
+          go state' vars' cmds
+
+sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
+sub vars (Var x) =
+  case lookup x vars of
+    Nothing -> discard -- ^ This can happen if a shrink step makes a variable unbound.
+    Just var_ ->
+      case fromDynamic var_ of
+        Nothing  -> error $ "impossible, variable " ++ show x ++ " has wrong type"
+        Just var -> var
+```
+
 #### Example: counter
+
+To make things more concrete, let's have a look at an example. All examples, in
+the rest of this post, will have three parts:
+
+  1. The software under test (SUT);
+  2. The model or fake that the SUT gets tested against;
+  3. The generated tests and output from running them.
+
+The SUT in this example is a counter implemented using a mutable variable.
 
 ##### SUT
 
@@ -585,7 +749,16 @@ instance StateModel Counter where
   runReal Incr = Incr_ <$> incr
 ```
 
+A common complaint is that the model (`Counter` and `runFake`) is as big as the
+implementation itself. This is true, because it's an example. In reality the
+model will often be many orders of magnitude smaller. This is due to the fact
+that the model, unlike the real implementation, doesn't need to persisting to
+disk, communicating over the network, or various perform time or space
+optimisations. Recall the LevelDB example from above.
+
 ##### Tests
+
+The tests, or property, can now be written as follows.
 
 ```haskell
 prop_counter :: Commands Counter -> Property
@@ -593,26 +766,55 @@ prop_counter cmds = monadicIO $ do
   runCommands cmds
   run reset
   assert True
-```
 
-```haskell
 reset :: IO ()
 reset = writeIORef gLOBAL_COUNTER 0
 ```
 
-To make things a bit more interesting
+To run them, we can load the module and type `quickCheck prop_counter` in the
+REPL, which gives us an output like:
+
+```
++++ OK, passed 100 tests:
+89% Get
+85% Incr
+
+Commands (2151 in total):
+52.02% Get
+47.98% Incr
+```
+
+Where the first group of percentages tell us the proportion of tests that
+contained the get and increment command respectively, and the second group of
+percentages tell us the proportion of get and increment commands out of all
+commands generated. Note that the first group doesn't add up to 100%, because
+most tests will contain both commands, whereas the second group does. The reason
+the second group is almost 50-50 is because in the generator we generate both
+commands with equal probability.
+
+Another thing to note is that we need to `reset` the counter between tests,
+otherwise the global counter will have the value from the last test while the
+model always starts from zero and we get a mismatch.
+
+To make things a bit more interesting, let's introduce a bug into our counter
+and see if the tests can find it. Let's make it so that if the counter has the
+value of 42, then it won't increment properly.
 
 ```haskell
 incr42Bug :: IO ()
-incr42Bug = atomicModifyIORef' gLOBAL_COUNTER
-  (\n -> if n == 42 then (n, ()) else (n + 1, ()))
+incr42Bug = modifyIORef' gLOBAL_COUNTER
+  (\n -> if n == 42 then n else n + 1)
 ```
 
+We also need to change the `runReal` function to use our buggy increment as
+follows.
 
 ```diff
   - runReal Incr = Incr_ <$> incr
   + runReal Incr = Incr_ <$> incr42Bug
 ```
+
+When we run the property now, we'll see something like the following output.
 
 ```
 *** Failed! Assertion failed (after 66 tests and 29 shrinks):
@@ -666,13 +868,23 @@ incr42Bug = atomicModifyIORef' gLOBAL_COUNTER
     Got: Get_ 42
 ```
 
+Notice that this is indeed the smallest counterexample and how it took 66
+randomly generated test cases to find the sequence of inputs that triggered the
+bug and then 29 shrink steps for QuickCheck to minimise it.
+
 #### Example: array-based queue
 
-The queue example from [*Testing the hard stuff and staying
+The next example is an array-based queue written in C. This example is taken
+from John's paper [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
-(2014)
+(2014).
 
 ##### SUT
+
+The implementation uses two indices which keep track of the front and back of
+the queue, this allows us to implement the queue in a circular buffer fashion.
+I've copied the C code straight from the paper and it contains a subtle bug, can
+you spot it?
 
 ```c
 typedef struct queue {
@@ -704,9 +916,71 @@ int size(Queue *q) {
 }
 ```
 
-##### Model / fake
+##### Model
+
+The circular buffer implementation is very efficient, because it reuses the
+allocated memory as we go around in circles, but it's not obviously correct.
+
+To model queues we'll use a more straight forward non-circular implementation.
+This is less efficient (doesn't matter as it's merely used during testing), but
+hopefully more obviously correct.
 
 ```haskell
+data FQueue = FQueue
+  { fqElems :: [Int]
+  , fqSize  :: Int
+  }
+```
+
+In the counter example above we only had one counter, so the model was merely a
+single integer. In this example, because of `new` returning a queue, we need to
+be able to model arbitrary many queues. We can this as follows:
+
+```haskell
+type State = Map (Var Queue) FQueue
+
+data Var a = Var Int
+```
+
+Where `Queue` is the Haskell data type that corresponds to the C `Queue` and the
+`Var a` data type is provided by the library and is a symbolic reference to `a`
+(just an `Int`eger). The idea being that in the model we don't have access to
+real `Queue`s, merely symbolic references to them. This might seem a bit
+strange, but I hope that it will become more clear when we model `new`.
+
+```haskell
+```
+
+```haskell
+data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
+  deriving (Eq, Show)
+
+
+fnew :: Int -> State -> Either Err (State, Var Queue)
+fnew sz s =
+  let
+    v = Var (Map.size s)
+  in
+    return (Map.insert v (FQueue [] sz) s, v)
+
+fput :: Var Queue -> Int -> State -> Either Err (State, ())
+fput q i s
+  | q `Map.notMember` s = Left QueueDoesNotExist
+  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Left QueueIsFull
+  | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
+
+fget :: Var Queue -> State -> Either Err (State, Int)
+fget q s
+  | q `Map.notMember` s        = Left QueueDoesNotExist
+  | null (fqElems (s Map.! q)) = Left QueueIsEmpty
+  | otherwise = case fqElems (s Map.! q) of
+      [] -> error "fget: impossible, we checked that it's non-empty"
+      i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
+
+fsize :: Var Queue -> State -> Either Err (State, Int)
+fsize q s
+  | q `Map.notMember` s = Left QueueDoesNotExist
+  | otherwise           = return (s, length (fqElems (s Map.! q)))
 ```
 
 ##### Testing
@@ -841,7 +1115,7 @@ When we run `quickcheck prop_dieHard` we get the following output:
 Notice how the trace shows the intermediate states, making it easy to verify
 that it's indeed a correct solution to the puzzle.
 
-### Parallel property-based testing in ~300 LOC
+### Parallel property-based testing in ~180 LOC
 
 Let's now turn our focus to parallel property-based testing.
 
@@ -1050,6 +1324,9 @@ stateful and parallel testing.
 #### Implementation
 
 ##### Parallel program generation and shrinking
+
+
+* shrinking can be improved, see qsm
 
 ##### Linearisability checking
 
