@@ -50,6 +50,7 @@ newtype Counter = Counter Int
 instance StateModel Counter where
 
   -- We start counting from zero.
+  initialState :: Counter
   initialState = Counter 0
 
   -- The commands correspond to the names of the functions that operate on the
@@ -77,8 +78,8 @@ instance StateModel Counter where
   runFake Incr  (Counter n) = return (Counter (n + 1), Incr_ ())
   runFake Get m@(Counter n) = return (m, Get_ n)
 
-  -- We also need to explain to which part of the SUT each command correspond
-  -- to.
+  -- We also need to explain which part of the counter API each command
+  -- corresponds to.
   runReal :: Command Counter r -> IO (Response Counter r)
   runReal Get  = Get_  <$> get
   -- runReal Incr = Incr_ <$> incr

@@ -372,6 +372,8 @@ as follows:
 
   4. examples
 
+  5. repo where people can open issues and ask questions and explore improvements
+
 Before we get started with stateful testing, let's first recap what vanilla
 (stateless) property-based testing does.
 
@@ -513,23 +515,15 @@ the real component and the model as well as checking that they conform.
 
 ##### Stateful testing interface
 
+The following is the interface which the user of the library has to implement in
+order for the library to provide the stateful property-based testing
+functionality.
+
+Don't try to make sense of all of this on a first read. There will be plenty of
+examples that will hopefully help make things more concrete as we go along.
+
 ```haskell
-class ( Monad (CommandMonad state)
-      , MonadIO (CommandMonad state)
-      , MonadCatch (CommandMonad state)
-      , Functor (Command state)
-      , Functor (Response state)
-      , Foldable (Response state)
-      , Eq (Response state (Reference state))
-      , Show state
-      , Show (Command state (Var (Reference state)))
-      , Show (Response state (Reference state))
-      , Show (Response state (Var (Reference state)))
-      , Show (Reference state)
-      , Show (PreconditionFailure state)
-      , Typeable (Reference state)
-      , Typeable state
-      ) => StateModel state where
+class ( ... ) => StateModel state where
 
   data Command  state :: Type -> Type
   data Response state :: Type -> Type
@@ -576,7 +570,6 @@ class ( Monad (CommandMonad state)
 
 ```haskell
 newtype Commands state = Commands [Command state (Var (Reference state))]
-deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
 
 precondition :: StateModel state
              => state -> Command state (Var (Reference state)) -> Bool
@@ -635,6 +628,7 @@ prune = go initialState
 ```
 
 ##### Running and assertion checking
+
 
 ```haskell
 runCommands :: forall state. StateModel state
@@ -715,6 +709,7 @@ newtype Counter = Counter Int
 instance StateModel Counter where
 
   -- We start counting from zero.
+  initialState :: Counter
   initialState = Counter 0
 
   -- The commands correspond to the names of the functions that operate on the
@@ -742,8 +737,8 @@ instance StateModel Counter where
   runFake Incr  (Counter n) = return (Counter (n + 1), Incr_ ())
   runFake Get m@(Counter n) = return (m, Get_ n)
 
-  -- We also need to explain to which part of the SUT each command correspond
-  -- to.
+  -- We also need to explain which part of the counter API each command
+  -- corresponds to.
   runReal :: Command Counter r -> IO (Response Counter r)
   runReal Get  = Get_  <$> get
   runReal Incr = Incr_ <$> incr
@@ -983,9 +978,62 @@ fsize q s
   | otherwise           = return (s, length (fqElems (s Map.! q)))
 ```
 
+```haskell
+instance StateModel State where
+
+  initialState = Map.empty
+
+  type Reference State = Queue
+
+  type PreconditionFailure State = Err
+
+  data Command State q
+    = New Int
+    | Put q Int
+    | Get q
+    | Size q
+    deriving (Show, Functor)
+
+  data Response State q
+    = New_ q
+    | Put_ ()
+    | Get_ Int
+    | Size_ Int
+    deriving (Eq, Show, Functor, Foldable)
+
+  generateCommand s
+    | Map.null s = New . getPositive <$> arbitrary
+    | otherwise  = oneof
+      [ New . getPositive <$> arbitrary
+      , Put  <$> arbitraryQueue <*> arbitrary
+      , Get  <$> arbitraryQueue
+      , Size <$> arbitraryQueue
+      ]
+    where
+      arbitraryQueue :: Gen (Var Queue)
+      arbitraryQueue = Var <$> choose (0, Map.size s - 1)
+
+  shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
+  shrinkCommand _s _cmd = []
+
+  runFake (New sz)  s = fmap New_  <$> fnew sz s
+  runFake (Put q i) s = fmap Put_  <$> fput q i s
+  runFake (Get q)   s = fmap Get_  <$> fget q s
+  runFake (Size q)  s = fmap Size_ <$> fsize q s
+
+  runReal (New sz)  = New_  <$> new sz
+  runReal (Put q i) = Put_  <$> put q i
+  runReal (Get q)   = Get_  <$> get q
+  runReal (Size q)  = Size_ <$> size q
+```
+
 ##### Testing
 
 ```haskell
+prop_queue :: Commands State -> Property
+prop_queue cmds = monadicIO $ do
+  runCommands cmds
+  assert True
 ```
 
 + regression tests?
@@ -995,10 +1043,6 @@ fsize q s
 This example comes from the paper [*QuickCheck testing for fun and
 profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
 (2007) and is also part of John's Midlands Graduate School course (2019).
-
-#### Example: file system
-
-+ proper coverage?
 
 #### Example: jug puzzle from Die Hard 3
 
@@ -1370,7 +1414,14 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 * https://martinfowler.com/bliki/ContractTest.html
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 * [Integrated Tests Are A Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger
-* Queue example again?
+
+#### Example: Queue example again?
+
+#### Example: file system
+
++ proper coverage?
+
+
 
 ## Future work
 

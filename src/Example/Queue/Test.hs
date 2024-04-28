@@ -69,5 +69,5 @@ instance StateModel State where
 
 prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do
-  _ <- runCommands cmds
+  runCommands cmds
   assert True

@@ -15,7 +15,6 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception (SomeException, try, displayException)
 import Control.Monad.IO.Class
-import Data.Dynamic
 import Data.Foldable
 import Data.List
 import Data.Proxy
@@ -162,8 +161,8 @@ interleavings (History evs0) =
                        | otherwise = xs
 
 linearisable :: forall state. StateModel state
-             => [(Int, Dynamic)] -> Forest (Op state) -> Bool
-linearisable vars = any' (go initialState)
+             => [(Int, Reference state)] -> Forest (Op state) -> Bool
+linearisable env = any' (go initialState)
   where
     go :: state -> Tree (Op state) -> Bool
     go s (Node (Op cmd cresp) ts) =
@@ -172,7 +171,7 @@ linearisable vars = any' (go initialState)
           error $ "linearisable: impossible, all precondtions are satisifed during generation\ncmd = " ++
                   show cmd ++ "\ns = " ++ show s ++ "\nerr = " ++ show err
         Right (s', resp) ->
-          cresp == fmap (sub vars) resp && any' (go s') ts
+          cresp == fmap (lookupEnv env) resp && any' (go s') ts
 
     any' :: (a -> Bool) -> [a] -> Bool
     any' _p [] = True
@@ -188,17 +187,17 @@ runParallelCommands (ParallelCommands cmdss0) = do
       monitor (tabulate "Commands" [name] . classify True name)
   monitor (tabulate "Number of concurrent commands" (map (show . length) cmdss0))
   evs <- liftIO newTQueueIO :: PropertyM (CommandMonad state) (TQueue (Event state))
-  vars <- go evs [] cmdss0
+  env <- go evs [] cmdss0
   hist <- History <$> liftIO (atomically (flushTQueue evs))
   monitor (counterexample (show hist))
-  assert (linearisable vars (interleavings hist))
+  assert (linearisable env (interleavings hist))
   where
-    go _evs vars [] = return vars
-    go evs vars (cmds : cmdss) = do
+    go _evs env [] = return env
+    go evs env (cmds : cmdss) = do
       refss <- liftIO $
-        mapConcurrently (\cmd -> runParallelReal evs (sub vars) cmd) cmds
-      let vars' = vars ++ zip [length vars..] (map toDyn (concat refss))
-      go evs vars' cmdss
+        mapConcurrently (\cmd -> runParallelReal evs (lookupEnv env) cmd) cmds
+      let env' = env ++ zip [length env..] (concat refss)
+      go evs env' cmdss
 
 runParallelReal :: forall state. StateModel state
                 => TQueue (Event state)

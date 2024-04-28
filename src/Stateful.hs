@@ -12,7 +12,6 @@ module Stateful where
 import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.IO.Class
-import Data.Dynamic
 import Data.Foldable
 import Data.Kind
 import Data.Void
@@ -34,13 +33,14 @@ class ( Monad (CommandMonad state)
       , Show (Response state (Var (Reference state)))
       , Show (Reference state)
       , Show (PreconditionFailure state)
-      , Typeable (Reference state)
-      , Typeable state
       ) => StateModel state where
 
+  -- If we think of the system under test as a black box, then commands are the
+  -- inputs and responses the outputs to the black box.
   data Command  state :: Type -> Type
   data Response state :: Type -> Type
 
+  -- References can be part of commands and responses.
   type Reference state :: Type
 
   type PreconditionFailure state :: Type
@@ -172,33 +172,30 @@ runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
 runCommands (Commands cmds0) = go initialState [] cmds0
   where
-    go :: state -> [(Int, Dynamic)] -> [Command state (Var (Reference state))]
+    go :: state -> [(Int, Reference state)] -> [Command state (Var (Reference state))]
        -> PropertyM (CommandMonad state) ()
-    go _state _vars [] = return ()
-    go  state  vars (cmd : cmds) = do
+    go _state _env [] = return ()
+    go  state  env (cmd : cmds) = do
       case runFake cmd state of
         Left _err -> pre False
         Right (state', resp) -> do
           let name = commandName cmd
           monitor (tabulate "Commands" [name] . classify True name)
-          let ccmd = fmap (sub vars) cmd
+          let ccmd = fmap (lookupEnv env) cmd
           cresp <- run (runReal ccmd)
           monitor (counterexample (show cmd ++ " --> " ++ show cresp))
           monitor (monitoring (state, state') ccmd cresp)
           let refs   = toList cresp
-              vars'  = vars ++ zip [length vars..] (map toDyn refs)
-              cresp' = fmap (sub vars') resp
+              env'   = env ++ zip [length env..] refs
+              cresp' = fmap (lookupEnv env') resp
               ok     = cresp == cresp'
           unless ok $
             monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
           assert ok
-          go state' vars' cmds
+          go state' env' cmds
 
-sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
-sub vars (Var x) =
-  case lookup x vars of
-    Nothing -> discard -- ^ This can happen if a shrink step makes a variable unbound.
-    Just var_ ->
-      case fromDynamic var_ of
-        Nothing  -> error $ "impossible, variable " ++ show x ++ " has wrong type"
-        Just var -> var
+lookupEnv :: [(Int, a)] -> Var a -> a
+lookupEnv env (Var x) =
+  case lookup x env of
+    Nothing  -> discard -- ^ This can happen if a shrink step makes a variable unbound.
+    Just ref -> ref
