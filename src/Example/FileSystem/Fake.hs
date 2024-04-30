@@ -14,11 +14,11 @@ module Example.FileSystem.Fake (
   , FakeFS(..)
   , FakeOp
   , emptyFakeFS
-  , mMkDir
-  , mOpen
-  , mWrite
-  , mClose
-  , mRead
+  , fMkDir
+  , fOpen
+  , fWrite
+  , fClose
+  , fRead
   ) where
 
 import Control.Exception
@@ -95,14 +95,14 @@ emptyFakeFS = F (Set.singleton (Dir [])) Map.empty Map.empty (Var 0)
 
 type FakeOp a = FakeFS -> (Either Err a, FakeFS)
 
-mMkDir :: Dir -> FakeOp ()
-mMkDir d m@(F ds fs hs n)
+fMkDir :: Dir -> FakeOp ()
+fMkDir d m@(F ds fs hs n)
   | d        `Set.member`    ds = (Left AlreadyExists, m)
   | parent d `Set.notMember` ds = (Left DoesNotExist, m)
   | otherwise                   = (Right (), F (Set.insert d ds) fs hs n)
 
-mOpen :: File -> FakeOp FHandle
-mOpen f m@(F ds fs hs n@(Var n_))
+fOpen :: File -> FakeOp FHandle
+fOpen f m@(F ds fs hs n@(Var n_))
   | alreadyOpen   = (Left Busy, m)
   | not dirExists = (Left DoesNotExist, m)
   | fileExists    = (Right n, F ds fs hs' n')
@@ -115,16 +115,16 @@ mOpen f m@(F ds fs hs n@(Var n_))
     dirExists   = fileDir f `Set.member` ds
     alreadyOpen = f `List.elem` Map.elems hs
 
-mWrite :: FHandle -> String -> FakeOp ()
-mWrite h s m@(F ds fs hs n)
+fWrite :: FHandle -> String -> FakeOp ()
+fWrite h s m@(F ds fs hs n)
   | Just f <- Map.lookup h hs = (Right (), F ds (Map.adjust (++ s) f fs) hs n)
   | otherwise                 = (Left HandleClosed, m)
 
-mClose :: FHandle -> FakeOp ()
-mClose h (F ds fs hs n) = (Right (), F ds fs (Map.delete h hs) n)
+fClose :: FHandle -> FakeOp ()
+fClose h (F ds fs hs n) = (Right (), F ds fs (Map.delete h hs) n)
 
-mRead :: File -> FakeOp String
-mRead f m@(F _ fs hs _)
+fRead :: File -> FakeOp String
+fRead f m@(F _ fs hs _)
   | alreadyOpen               = (Left Busy         , m)
   | Just s <- Map.lookup f fs = (Right s           , m)
   | otherwise                 = (Left DoesNotExist , m)

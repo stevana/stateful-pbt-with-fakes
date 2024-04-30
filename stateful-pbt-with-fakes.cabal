@@ -25,8 +25,10 @@ library
     Example.DieHard
     Example.FileSystem.Fake
     Example.FileSystem.Interface
+    Example.FileSystem.Real
     Example.FileSystem.Test
     Example.Queue.Fake
+    Example.Queue.Interface
     Example.Queue.Real
     Example.Queue.Test
     Example.Registry.Real

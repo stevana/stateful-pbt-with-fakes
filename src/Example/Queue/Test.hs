@@ -55,10 +55,10 @@ instance StateModel State where
   shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
   shrinkCommand _s _cmd = []
 
-  runFake (New sz)  s = fmap New_  <$> fnew sz s
-  runFake (Put q i) s = fmap Put_  <$> fput q i s
-  runFake (Get q)   s = fmap Get_  <$> fget q s
-  runFake (Size q)  s = fmap Size_ <$> fsize q s
+  runFake (New sz)  s = fmap New_  <$> fNew sz s
+  runFake (Put q i) s = fmap Put_  <$> fPut q i s
+  runFake (Get q)   s = fmap Get_  <$> fGet q s
+  runFake (Size q)  s = fmap Size_ <$> fSize q s
 
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i

@@ -18,7 +18,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
 import Example.FileSystem.Fake
-import Example.FileSystem.Interface
+import Example.FileSystem.Real
 import Stateful
 
 ------------------------------------------------------------------------
@@ -91,18 +91,18 @@ instance StateModel FakeFS where
       genString :: Gen String
       genString = sized $ \n -> replicateM n (elements "ABC")
 
-  runFake (MkDir d)   = assoc MkDir_ . mMkDir d
-  runFake (Open f)    = assoc Open_  . mOpen f
-  runFake (Write h s) = assoc Write_ . mWrite h s
-  runFake (Close h)   = assoc Close_ . mClose h
-  runFake (Read f)    = assoc Read_  . mRead f
+  runFake (MkDir d)   = assoc MkDir_ . fMkDir d
+  runFake (Open f)    = assoc Open_  . fOpen f
+  runFake (Write h s) = assoc Write_ . fWrite h s
+  runFake (Close h)   = assoc Close_ . fClose h
+  runFake (Read f)    = assoc Read_  . fRead f
 
   runReal :: Command FakeFS Handle -> IO (Response FakeFS Handle)
-  runReal (MkDir d)   = MkDir_ <$> iMkDir (real root) d
-  runReal (Open f)    = Open_  <$> iOpen (real root) f
-  runReal (Write h s) = Write_ <$> iWrite (real root) h s
-  runReal (Close h)   = Close_ <$> iClose (real root) h
-  runReal (Read f)    = Read_  <$> iRead (real root) f
+  runReal (MkDir d)   = MkDir_ <$> rMkDir d
+  runReal (Open f)    = Open_  <$> rOpen f
+  runReal (Write h s) = Write_ <$> rWrite h s
+  runReal (Close h)   = Close_ <$> rClose h
+  runReal (Read f)    = Read_  <$> rRead f
 
   monitoring :: (FakeFS, FakeFS) -> Command FakeFS Handle -> Response FakeFS Handle
              -> Property -> Property
@@ -116,9 +116,6 @@ instance StateModel FakeFS where
 
 data Tag = OpenTwo | SuccessfulRead
   deriving Show
-
-root :: FilePath
-root = "/tmp/qc-test"
 
 assoc :: (a -> Response FakeFS FHandle) -> (Either e a, FakeFS)
       -> Either e (FakeFS, Response FakeFS FHandle)
