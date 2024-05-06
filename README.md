@@ -327,99 +327,151 @@ licence in Erlang would then go and port the library in another language.
 
 ### What can we do about it?
 
-So here we are, about fifteen years after the first papers that introduced
-stateful and parallel testing, dispite the best efforts of everyone involved,
-and we still don't have these features in most property-based testing libraries,
-even though these features are useful and wanted.
+I think there's at least two things worth trying.
 
+1. Provide a short open source implementation of stateful and parallel
+   property-based testing, analogous to the original ~300LOC vanilla QuickCheck
+   implementation.
 
+   Perhaps part of the original QuickCheck library's success in spreading to so
+   many other languages can be attributed to the fact that its small
+   implementation and that it is part of the original paper?
 
-Personally I got quite sad when I saw that stateful testing was
-[called](https://lobste.rs/s/1aamnj/property_testing_stateful_code_rust#c_jjs27f)
-harder to learn and more heavyweight than an ad hoc approximation of it using
-vanilla property-based testing.
+2. Try to make the formal specification part easier, so that we don't need to
+   train developers (as much).
 
-I think this is evidence of the fact that people don't fully understand the full
-benefits of parallel testing. While it's true that stateful testing adds another
-layer or API that you have to learn, but from this sequential model we can
-derive parallel tests by adding two lines of code. Can't blame them when only
-4/27 libraries show how to do this.
-
-I like to think that part of the original QuickCheck library's success in
-spreading to so many other languages can be attributed to the fact that it is
-small, around 300 lines of code, and is part of the original paper.
-
-Perhaps if the code for stateful and parallel testing was as small and was
-provided in the papers, then we would have more libraries supporting those
-features by now?
-
-Regarding specifications requring a different way of thinking that needs
-training, perhaps we can avoid this by not using state machines as the basis for
-the specifications, but rather reuse techniques that programmers are already
-familar with?
+   Perhaps we can avoid state machines as basis for specifications and instead
+   reuse concepts that programmers are already familiar with from their current
+   testing activities, e.g. mocking and test doubles more generally?
 
 ## Synthesis
 
 In order to test the above hypothesis, I'd like to spend the rest of this post
 as follows:
 
-  1. show how one can implement stateful property-based testing in 150 lines of code.
+  1. Show how one can implement stateful and parallel property-based testing in
+     about 330 lines of code (similar to the size of the original QuickCheck
+     implementation);
 
-  2. add parallel testing in ~300 lines of code
+  2. Make specifications simpler by using
+     [fakes](https://martinfowler.com/bliki/TestDouble.html) rather than state
+     machines.
 
-  3. make specifications simpler using fakes, and put this technique in context
-     of software development at large.
+Before we get started with stateful testing, let's first recap how
+property-based testing of pure functions works.
 
-  4. examples
+### Pure property-based testing recap
 
-  5. repo where people can open issues and ask questions and explore improvements
+It's considered good practice to test new functions or functionality, to make
+sure it does what we want. For example, imagine we've written a linked-list
+reversal function called `reverse`, then it might be sensible to test it against
+a couple of lists such as the empty list and, say, the three element list `[1,
+2, 3]`.
 
-Before we get started with stateful testing, let's first recap what vanilla
-(stateless) property-based testing does.
+How does one choose which example inputs to test against though? Typically one
+wants to choose corner cases, such as the empty list, that perhaps were
+overlooked during the implementation. It's difficult to think of corner cases
+that you might have overlooked! This is where generating random inputs, a key
+feature of property-based testing, comes in. The idea being that random inputs
+will eventually hit corner cases.
 
-### Property-based testing recap
+When we manually pick inputs for our tests, like `[1, 2, 3]`, we know what the
+output should be and so we can make the appropriate assertion, i.e. `reverse [1,
+2, 3] == [3, 2, 1]`. When we generate random inputs we don't always know what
+the output should be. This is where writing properties that relate the output to
+the input somehow comes in. For example, while we don't know what the output of
+reversing an arbitrary list is, we do know that reversing it twice will give
+back the input. This is how we can express this property in QuickCheck:
 
-The original idea is that we can test some pure (or side-effect free) function
-$f : A \to B$ by randomly generating its argument ($A$) and then checking that
-some relation, $R : A \to B \to Bool$, between the input and output holds.
+```
+>>> quickCheck (\(xs :: [Int]) -> reverse (reverse xs) == xs)
++++ OK, passed 100 tests.
+```
 
-For example let's say that the function we want to test is a list reversal
-function ($reverse$), then the argument we need to randomly generate is a list,
-and the relation can be anything we'd like to hold for our list reversal
-function, for example we can specify that reversing the result of rerversal
-gives back the original list, i.e. $reverse(reverse(xs)) \equiv xs$.
+By default 100 tests get generated, but that can be adjusted:
 
-Here are a few other typical examples:
+```
+>>> quickCheck (withMaxSuccess 5 (\(xs :: [Int]) -> reverse (reverse xs) == xs))
++++ OK, passed 5 tests.
+```
 
-- `forall (xs : List Int). reverse (reverse xs) == xs`
-- `forall (i : Input). deserialise (serialise i) == i`
-- `forall (xs : List Int). sort (sort xs) == sort xs`
-- `forall (i j k : Int). (i + j) + k == i + (j + k)`
-- `forall (x : Int, xs : List Int). member x (insert x xs) && not (member x (remove x xs))`
+We can see what test get generated using `verboseCheck`:
 
-The idea is that we quantify over some inputs (left-hand side of the `.` above)
-which the PBT library will instantiate to random values before checking the
-property (right-hand side). In effect the PBT library will generate unit tests,
-e.g. the list `[1, 2, 3]` can be generated and reversing that list twice will
-give back the same list. How many unit tests are generated can be controlled via
-a parameter of the PBT library.
+```haskell
+>>> verboseCheck (withMaxSuccess 5 (\(xs :: [Int]) -> reverse (reverse xs) == xs))
+Passed:
+[]
 
-Typical properties to check for include: involution (reverse example above),
-inverses (serialise example), idempotency (sort example), associativity
-(addition example), axioms of abstract datatypes (member example) etc. Readers
-familiar with discrete math might also notice the structural similarity of PBT
-with proof by induction, in a sense: the more unit tests we generate the closer
-we come to approximating proof by induction (not quite true but could be a
-helpful analogy for now).
+Passed:
+[1]
 
-XXX: https://fsharpforfunandprofit.com/posts/property-based-testing-2/
+Passed:
+[-2]
 
-* Most tutorials on property-based testing only cover testing pure functions
+Passed:
+[2]
+
+Passed:
+[-4,-2,-2,3]
+
++++ OK, passed 5 tests.
+```
+
+Or by using `sample` on the appropriate `Gen`erator. In this case we are
+generating lists of integers, hence the `Gen [Int]` type annotation:
+
+```haskell
+>>> sample (arbitrary :: Gen [Int])
+[]
+[]
+[-2,2,3,-2]
+[-4]
+[4,6,-2,-6,-1]
+[1,7,5,-8,1]
+[-11,4]
+[3,-1,11]
+[]
+[-3,17,-14,-1,17,18,-8,-9,-13,-7]
+[6,19,6,9,-15,-6,-19]
+```
+
+The list and integer generators are provided by the library and I hope you agree
+that these seem like sensible arbitrary lists to use in our tests.
+
+Next let's have a look at when a property fails. For example this is what
+happens if we try to test that the output of reversing a list is the input list:
+
+```
+>>> quickCheck (\(xs :: [Int]) -> reverse xs == xs)
+*** Failed! Falsified (after 3 tests and 2 shrinks):
+[0,1]
+```
+
+We see that after 3 tests a test case was generated that failed, the input got
+shrunk twice and the minimal counter example `[0, 1]` is presented. Notice that
+we do need a list that is at least of length two, because any shorter list will
+reverse to itself.
+
+As pointed out earlier, coming up with these properties is by no means obvious.
+There are however a few patterns that come up over and over again. With
+`reverse` we saw an example of an involutory function, i.e. `f (f x) == x`, here
+are a few other examples:
+
+- Inverses, e.g. `\(i : Input) -> deserialise (serialise i) == i`;
+- Idempotency, e.g. `\(xs : [Int]) -> sort (sort xs) == sort xs`;
+- Associativity, e.g. `\(i j k : Int) -> (i + j) + k == i + (j + k)`;
+- Axioms of abstract data types, e.g. `\(x : Int)(xs : [Int]) -> member x
+  (insert x xs) && not (member x (remove x xs))`;
+- Metamorphic properties, e.g. `\(g : Graph)(m n : Node) -> shortestPath g m n ==
+  shortestPath g n m`.
+
+Readers familiar with discrete math might recognise some of the above.
 
 ### Stateful property-based testing in ~150 LOC
 
-Having recalled how vanilla property-based testing works, let's now build a
-module on top which allows us to do stateful testing.
+Having recalled how pure property-based testing works, with its input
+generation, shrinking and properties, let's now build a module on top which
+allows us to do stateful testing.
 
 Before we do so, I'll give some reasons why developing such a module make sense,
 how it works at a high-level and what my sources of inspiration are.
@@ -445,7 +497,7 @@ Another difference is that stateful systems often create some sort of reference
 or handle, which allows the user to operate on some resource. For example when
 working with a POSIX-like filesystem we open, operate on and finally close file
 handles. Or some HTTP API might return a UUID to represent some page and
-subsequent changes via API calls to that page need to include that UUID, etc.
+subsequent changes to that page via API calls need to include that UUID, etc.
 
 So while it's certainly possible to test stateful systems using vanilla
 property-based testing, it's convenient to have a library take care of modelling
@@ -523,148 +575,16 @@ Don't try to make sense of all of this on a first read. There will be plenty of
 examples that will hopefully help make things more concrete as we go along.
 
 ```haskell
-class ( ... ) => StateModel state where
-
-  data Command  state :: Type -> Type
-  data Response state :: Type -> Type
-
-  type Reference state :: Type
-
-  type PreconditionFailure state :: Type
-  type PreconditionFailure state = Void
-
-  type CommandMonad state :: Type -> Type
-  type CommandMonad state = IO
-
-  generateCommand :: state -> Gen (Command state (Var (Reference state)))
-
-  shrinkCommand :: state -> Command state (Var (Reference state))
-                -> [Command state (Var (Reference state))]
-  shrinkCommand _state _cmd = []
-
-  initialState :: state
-
-  runFake :: Command state (Var (Reference state)) -> state
-          -> Either (PreconditionFailure state)
-                    (state, Response state (Var (Reference state)))
-
-  runReal :: Command state (Reference state)
-          -> CommandMonad state (Response state (Reference state))
-
-  monitoring :: (state, state)
-             -> Command state (Reference state)
-             -> Response state (Reference state)
-             -> Property -> Property
-  monitoring _states _cmd _resp = id
-
-  commandName :: (Show (Command state ref), Show ref)
-              => Command state ref -> String
-  commandName = head . words . show
-
-  -- XXX: needed for parallel
-  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 ```
-
 
 ##### Generating and shrinking
 
 ```haskell
-newtype Commands state = Commands [Command state (Var (Reference state))]
-
-precondition :: StateModel state
-             => state -> Command state (Var (Reference state)) -> Bool
-precondition s cmd = case runFake cmd s of
-  Left _  -> False
-  Right _ -> True
-
-nextState :: StateModel state
-          => state -> Command state (Var (Reference state)) -> state
-nextState s cmd = case runFake cmd s of
-  Right (s', _) -> s'
-  Left _err -> error "nextState: impossible, we checked for success in precondition"
-
-instance StateModel state => Arbitrary (Commands state) where
-
-  arbitrary :: Gen (Commands state)
-  arbitrary = Commands <$> genCommands initialState
-    where
-      genCommands :: StateModel state
-                  => state -> Gen [Command state (Var (Reference state))]
-      genCommands s = sized $ \n ->
-        let
-          w = n `div` 2 + 1
-        in
-          frequency
-            [ (1, return [])
-            , (w, do mcmd <- generateCommand s `suchThatMaybe` precondition s
-                     case mcmd of
-                       Nothing  -> return []
-                       Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
-            ]
-
-  shrink :: Commands state -> [Commands state]
-  shrink (Commands cmds) =
-    map (Commands . prune . map fst)
-        (shrinkList shrinker (snd (withStates initialState cmds)))
-    where
-      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
-
-withStates :: StateModel state
-           => state -> [Command state (Var (Reference state))]
-           -> (state, [(Command state (Var (Reference state)), state)])
-withStates s0 = go s0 []
-  where
-    go s acc []           = (s, reverse acc)
-    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
-
-prune :: StateModel state
-      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
-prune = go initialState
-  where
-    go _s [] = []
-    go  s (cmd : cmds)
-      | precondition s cmd = cmd : go (nextState s cmd) cmds
-      | otherwise          = go s cmds
 ```
 
 ##### Running and assertion checking
 
-
 ```haskell
-runCommands :: forall state. StateModel state
-            => Commands state -> PropertyM (CommandMonad state) ()
-runCommands (Commands cmds0) = go initialState [] cmds0
-  where
-    go :: state -> [(Int, Dynamic)] -> [Command state (Var (Reference state))]
-       -> PropertyM (CommandMonad state) ()
-    go _state _vars [] = return ()
-    go  state  vars (cmd : cmds) = do
-      case runFake cmd state of
-        Left _err -> pre False
-        Right (state', resp) -> do
-          let name = commandName cmd
-          monitor (tabulate "Commands" [name] . classify True name)
-          let ccmd = fmap (sub vars) cmd
-          cresp <- run (runReal ccmd)
-          monitor (counterexample (show cmd ++ " --> " ++ show cresp))
-          monitor (monitoring (state, state') ccmd cresp)
-          let refs   = toList cresp
-              vars'  = vars ++ zip [length vars..] (map toDyn refs)
-              cresp' = fmap (sub vars') resp
-              ok     = cresp == cresp'
-          unless ok $
-            monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
-          assert ok
-          go state' vars' cmds
-
-sub :: Typeable a => [(Int, Dynamic)] -> Var a -> a
-sub vars (Var x) =
-  case lookup x vars of
-    Nothing -> discard -- ^ This can happen if a shrink step makes a variable unbound.
-    Just var_ ->
-      case fromDynamic var_ of
-        Nothing  -> error $ "impossible, variable " ++ show x ++ " has wrong type"
-        Just var -> var
 ```
 
 #### Example: counter
@@ -689,7 +609,10 @@ gLOBAL_COUNTER = unsafePerformIO (newIORef 0)
 {-# NOINLINE gLOBAL_COUNTER #-}
 
 incr :: IO ()
-incr = atomicModifyIORef' gLOBAL_COUNTER (\n -> (n + 1, ()))
+incr :: IO ()
+incr = do
+  n <- readIORef gLOBAL_COUNTER
+  writeIORef gLOBAL_COUNTER (n + 1)
 
 get :: IO Int
 get = readIORef gLOBAL_COUNTER
@@ -1171,7 +1094,7 @@ that I've stolen ideas from.
 
 Typically debugging buggy concurrent code is not fun. The main reason for this
 is that the threads interleave in different ways between executions, making it
-hard to reproduce the bug.
+hard to reproduce the bug and hard to verify that a bug fix actually worked.
 
 * Heisenbug
 
@@ -1415,18 +1338,45 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 * Edsko's lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
 * [Integrated Tests Are A Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger
 
-#### Example: Queue example again?
+#### Motivation
+#### How it works
+
+#### Example: queue (again)
 
 #### Example: file system
 
 + proper coverage?
 
+#### Example: bigger system of components?
+
+* A queue and a file system might not seem necessary to fake (unless we consider fault-injection)
+
+```haskell
+
+data IServiceA = ...
+data IServiceB = ...
+data IServiceC = ...
+
+iServiceB :: IServiceC -> IO IServiceB
+iServiceA :: IServiceB -> IO IServiceA
+```
+
+* Stateful and parallel test C, this gives us a fake of C which is contract tested
+* Use C fake when integration testing B
+* Use B fake (which uses the C fake) when testing A
 
 
-## Future work
+## Conclusion and future work
+
+* Stateful and parallel testing in ~330 LOC vs the 300LOC of the first version
+  of QuickCheck
+
+* How to test bigger systems in a compositional manner by reusing the fakes
 
 * Translate code to other programming language paradigms, thus making it easier
   for library implementors
+
+* repo where people can open issues and ask questions and explore improvements
 
 * Having a compact code base makes it cheaper to make experimental changes.
 
@@ -1446,6 +1396,9 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 
 * Distributed systems
   - Fault injection
+    + [*Simple Testing Can Prevent Most Critical
+      Failures*](https://www.usenix.org/conference/osdi14/technical-sessions/presentation/yuan)
+      by Yuan et al (OSDI 2014)
     + Jepsen's knossos checker
   - Simulation testing
     + Always and sometimes combinators?

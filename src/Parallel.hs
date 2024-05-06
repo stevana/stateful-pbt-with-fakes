@@ -74,7 +74,8 @@ instance StateModel state => Arbitrary (ParallelCommands state) where
             | otherwise      =        go s cmdss
 
 withParStates :: StateModel state
-              => [[Command state (Var (Reference state))]] -> [[(Command state (Var (Reference state)), state)]]
+              => [[Command state (Var (Reference state))]]
+              -> [[(Command state (Var (Reference state)), state)]]
 withParStates = go initialState
   where
     go _s []             = []

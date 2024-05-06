@@ -40,15 +40,22 @@ class ( Monad (CommandMonad state)
   data Command  state :: Type -> Type
   data Response state :: Type -> Type
 
-  -- References can be part of commands and responses.
+  -- Sometimes a command needs to refer to a previous response, e.g. when a file
+  -- is opened we get a handle which is later refered to when writing or reading
+  -- form the file. File handles, and similar constructs, are called references
+  -- and can be part of commands and responses.
   type Reference state :: Type
 
+  -- Not all commands are valid in all states. Pre-conditions allow the user to
+  -- specify when a command is safe to execute, for example we cannot write or
+  -- read to or from an unopened file. The `PreconditionFailure` data type
+  -- allows the user to create custom pre-condition failures. By default now
+  -- pre-condition failures are allowed, thus the `Void` (empty) type.
   type PreconditionFailure state :: Type
   type PreconditionFailure state = Void
 
-  type CommandMonad state :: Type -> Type
-  type CommandMonad state = IO
 
+  --
   generateCommand :: state -> Gen (Command state (Var (Reference state)))
 
   shrinkCommand :: state -> Command state (Var (Reference state))
@@ -74,6 +81,15 @@ class ( Monad (CommandMonad state)
               => Command state ref -> String
   commandName = head . words . show
 
+  -- Most often the result of executing a command against the system under test
+  -- will live in the IO monad, but sometimes it can be useful to be able a
+  -- choose another monad.
+  type CommandMonad state :: Type -> Type
+  type CommandMonad state = IO
+
+  -- If another command monad is used we need to provide a way run it inside the
+  -- IO monad. This is only needed for parallel testing, because IO is the only
+  -- monad we can execute on different threads.
   runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 
 ------------------------------------------------------------------------
@@ -94,15 +110,18 @@ instance Foldable NonFoldable where
 
 -- * Generating and shrinking
 
-newtype Commands state = Commands [Command state (Var (Reference state))]
+newtype Commands state = Commands
+  { unCommands :: [Command state (Var (Reference state))] }
 deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
 
+-- The precondition for a command is the same as the fake returning a value.
 precondition :: StateModel state
              => state -> Command state (Var (Reference state)) -> Bool
 precondition s cmd = case runFake cmd s of
   Left _  -> False
   Right _ -> True
 
+-- Get the next state by running the fake. Assumes that the precondition holds.
 nextState :: StateModel state
           => state -> Command state (Var (Reference state)) -> state
 nextState s cmd = case runFake cmd s of
