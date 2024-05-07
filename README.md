@@ -469,146 +469,111 @@ Readers familiar with discrete math might recognise some of the above.
 
 ### Stateful property-based testing in ~150 LOC
 
-Having recalled how pure property-based testing works, with its input
-generation, shrinking and properties, let's now build a module on top which
-allows us to do stateful testing.
+In the pure property-based testing case, that we just looked at, the picture
+of the test setup looks a bit like this:
 
-Before we do so, I'll give some reasons why developing such a module make sense,
-how it works at a high-level and what my sources of inspiration are.
 
-#### Motivation
-
-In order to explain why stateful property-based testing is needed, it's perhaps
-helpful to have a look at how it's different from pure property-based testing.
-
-A pure, or side-effect free, function always returns the same output if given
-the same input. This isn't true for a stateful function or component.
-
-For example, one of the simplest stateful components we can build is a counter.
-If we think of the counter as a black box and our input is "increment the
-counter" and the output is the new value, then repeating the same input will not
-give the same output (assuming "increment the counter" is implemented using
-$+1$).
-
-So one difference is that we need to account for the state of the counter, or
-the history of all inputs, while testing.
-
-Another difference is that stateful systems often create some sort of reference
-or handle, which allows the user to operate on some resource. For example when
-working with a POSIX-like filesystem we open, operate on and finally close file
-handles. Or some HTTP API might return a UUID to represent some page and
-subsequent changes to that page via API calls need to include that UUID, etc.
-
-So while it's certainly possible to test stateful systems using vanilla
-property-based testing, it's convenient to have a library take care of modelling
-the state and dealing with references.
-
-Furthermore, parallel testing builds upon the stateful testing interface without
-requiring the user to do any extra work, but more on this later.
-
-#### How it works
-
-The high-level idea behind stateful property-based testing is that first we
-create some kind of in-memory model of the system we want to test.
-
-For example in the case of the counter the model is just an integer, while in
-the case of the filesystem a simplified model is a tree with filepaths as node
-labels and children either being other trees (directories) or leaves of bytes
-(files).
-
-Once we have our model we generate sequences of inputs, where inputs are actions
-the user can take, e.g. increment in the case of a counter or
-open/read/write/close in the case of filesystem.
-
-The generated sequence of inputs is then executed against the real component as
-well as the model of it, and then the outputs are compared to check that the
-real component is faithful to the model. If it isn't we shrink the sequence of
-inputs to try to present the minimal counterexample, as in the stateless case.
-
-#### Prior work
-
-I'd like to explain where my inspiration is coming from, because I think it's
-important to note that the code I'm about to present didn't come from thin air
-(even though it might look simple).
-
-I've been thinking about this problem since the end of 2016 as can be witnesed
-by my involvement in the following
-[issue](https://github.com/nick8325/quickcheck/issues/139) about adding stateful
-testing to Haskell's QuickCheck.
-
-My initial attempt eventually turned into the Haskell library
-`quickcheck-state-machine`.
-
-The version below is a combination of my experience building that library, but
-also inspried by:
-
-  1. Nick Smallbone's initial
-  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
-  (2017) from that same issue. (Nick was, and I think still is, the main
-  maintainer of the original QuickCheck library);
-
-  2. John's Midlands Graduate School
-  [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
-
-  3. Edsko de Vries' "lockstep"
-  [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
-
-I'll refer back to these when I motivate my design decisions below.
-
-#### Implementation
-
-There are three parts to the implementation. First the stateful testing
-interface (or type class), this is what the user needs to implement, the rest of
-the library is programmed against this interface and provides the testing
-functionality. The second part is generating and shrinking sequences of inputs,
-which is derived from the interfaces ability to generate and shrink individual
-inputs. The third and final part is about executing the generated inputs against
-the real component and the model as well as checking that they conform.
-
-##### Stateful testing interface
-
-The following is the interface which the user of the library has to implement in
-order for the library to provide the stateful property-based testing
-functionality.
-
-Don't try to make sense of all of this on a first read. There will be plenty of
-examples that will hopefully help make things more concrete as we go along.
-
-```haskell
+```
+         +-----+
+      i  |     |  o
+    ----->  f  +---->
+         |     |
+         +-----+
 ```
 
-##### Generating and shrinking
+Where `i` is the input we generate, `f` is the function we are applying the
+generated input to to produce the output `o`. In the case of the `reverse`
+example, from before, `i` and `o` are of type list of integers (`[Int]`), `f` is
+`reverse . reverse` and the property that we check for every generated input is
+that input is equal to the output.
 
-```haskell
+Next let's contrast this picture with how the test setup looks when we are
+testing a stateful component. A simple example of a stateful component is a
+counter with an `incr`ement operation which increment the counter and returns
+the old count.
+
+Unlike in the pure case, the same input will not give the same output. For
+example the first time we do `incr` we get back `0` (if we start counting from
+zero) while the second time we do `incr` we get `1`. A database or a file system
+are two other examples of stateful components, where the history of previous
+inputs affects the output of the next input.
+
+In the stateful case, the picture looks more like this:
+
+```
+    +------+     +------+     +------+
+    |      | i1  |      | i2  |      |
+    |  s0  +----->  s1  +----->  s2  | ...
+    |      |     |      |     |      |
+    +------+     +--+---+     +--+---+
+                    |            |
+                    | o1         | o2
+                    v            v
+
+    ---------------------------------> time
 ```
 
-##### Running and assertion checking
+Where `s` is the state, `i` is an input (e.g. `incr`) and `o` is an ouput.
+Notice how the state evolves over time and depends on the history of inputs.
 
-```haskell
+In the pure case each test case is a single input, in the stateful case we need
+a sequence of inputs in order to test how the system changes over time. In the
+pure case our our properties were relations on the input and output, i.e. `R : i
+-> o -> Bool`. In the stateful case our properties would need to be generalised
+to `R' : [i] -> [o] -> Bool` to account for how the state changes over time.
+Writing such properties is cumbersome, an alternative is to account for the
+state explicitly by means of some kind of model.
+
+This model could be a state machine of type `s -> i -> (s, o)`, i.e. a function
+from the old state and an input to the next state and the output. From this we
+can derive a property that for each input checks if the outputs of the stateful
+component agrees with the output of the state machine:
+
 ```
+   +------+     +------+     +------+
+   |      | i1  |      | i2  |      |
+   |  s0  +----->  s1  +----->  s2  | ...
+   |      |     |      |     |      |
+   +------+     +--++--+     +--++--+
+                   ||           ||
+                   ||o1         || o2
+                   ||           ||
+   +------+     +--++--+     +--++--+
+   |      | i1  |      | i2  |      |
+   |  m0  +----->  m1  +----->  m2  | ...
+   |      |     |      |     |      |
+   +------+     +------+     +------+
+```
+
+In case the outputs disagree we shrink the sequence of inputs and try to present
+the smallest counterexample, as in the pure case.
+
+Let's make things more concrete with some actual code that we can run.
 
 #### Example: counter
 
-To make things more concrete, let's have a look at an example. All examples, in
-the rest of this post, will have three parts:
+All examples, in the rest of this post, will have three parts:
 
-  1. The software under test (SUT);
-  2. The model or fake that the SUT gets tested against;
+  1. The software under test;
+  2. The model that the software under test gets tested against;
   3. The generated tests and output from running them.
 
-The SUT in this example is a counter implemented using a mutable variable.
+The first part is independent of the stateful testing library we are building.
+The second part is hooking up the first part to the library by implementing an
+interface (type class). I'll show you the definition of the type class after the
+example. While the final part is how to write the actual property and interpret
+the output from running them.
 
-##### SUT
+##### Software under test
 
-They don't teach you this in school, but this is how you can implement global
-mutable variables in Haskell:
+This is how you can implement a counter using a global mutable variable in
+Haskell:
 
 ```haskell
 gLOBAL_COUNTER :: IORef Int
 gLOBAL_COUNTER = unsafePerformIO (newIORef 0)
 {-# NOINLINE gLOBAL_COUNTER #-}
 
-incr :: IO ()
 incr :: IO ()
 incr = do
   n <- readIORef gLOBAL_COUNTER
@@ -618,17 +583,19 @@ get :: IO Int
 get = readIORef gLOBAL_COUNTER
 ```
 
-The reason it's not taught is because global state easily leads to a mess, but
-in our case it provides the minimal possible example of a stateful system.
+Notice that here `incr` doesn't return the old value, like above, and instead we
+have a separate operation `get` which returns the current value of the counter.
 
 ##### Model
 
-To model our counter, we'll implement a fake of a counter using an integer.
+To model our counter we'll use an integer.
 
 ```haskell
 newtype Counter = Counter Int
   deriving (Eq, Show)
 
+-- We'll come back to the definition of the `StateModel` type class after this
+-- example.
 instance StateModel Counter where
 
   -- We start counting from zero.
@@ -650,12 +617,8 @@ instance StateModel Counter where
     | Get_ Int
     deriving (Eq, Show, Functor, Foldable)
 
-  -- We'll generate increments and reads of the counter with equal probability.
-  generateCommand :: Counter -> Gen (Command Counter r)
-  generateCommand _s = elements [Incr, Get]
-
-  -- The fake takes a command and the model of the counter and returns a new
-  -- model and a response.
+  -- The state machine takes a command and the model of the counter and returns
+  -- a new model and a response. We'll come back to the role of the `Either` later.
   runFake :: Command Counter r -> Counter -> Either Void (Counter, Response Counter r)
   runFake Incr  (Counter n) = return (Counter (n + 1), Incr_ ())
   runFake Get m@(Counter n) = return (m, Get_ n)
@@ -665,6 +628,12 @@ instance StateModel Counter where
   runReal :: Command Counter r -> IO (Response Counter r)
   runReal Get  = Get_  <$> get
   runReal Incr = Incr_ <$> incr
+
+  -- We'll generate increments and reads of the counter with equal probability.
+  -- Notice that we only need to explain how to generate a single command, the
+  -- library will use this to generate sequences of commands as we'll see later.
+  generateCommand :: Counter -> Gen (Command Counter r)
+  generateCommand _s = elements [Incr, Get]
 ```
 
 A common complaint is that the model (`Counter` and `runFake`) is as big as the
@@ -720,8 +689,12 @@ value of 42, then it won't increment properly.
 
 ```haskell
 incr42Bug :: IO ()
-incr42Bug = modifyIORef' gLOBAL_COUNTER
-  (\n -> if n == 42 then n else n + 1)
+incr42Bug = do
+  n <- readIORef gLOBAL_COUNTER
+  let n' = if n == 42
+           then n
+           else n + 1
+  writeIORef gLOBAL_COUNTER n'
 ```
 
 We also need to change the `runReal` function to use our buggy increment as
@@ -789,6 +762,68 @@ When we run the property now, we'll see something like the following output.
 Notice that this is indeed the smallest counterexample and how it took 66
 randomly generated test cases to find the sequence of inputs that triggered the
 bug and then 29 shrink steps for QuickCheck to minimise it.
+
+#### Library implementation
+
+There are three parts to the implementation. First the stateful testing
+interface (or type class), this is what the user needs to implement, the rest of
+the library is programmed against this interface and provides the testing
+functionality. The second part is generating and shrinking sequences of inputs,
+which is derived from the interfaces ability to generate and shrink individual
+inputs. The third and final part is about executing the generated inputs against
+the real component and the model as well as checking that they conform.
+
+##### Stateful testing interface
+
+The following is the interface which the user of the library has to implement in
+order for the library to provide the stateful property-based testing
+functionality.
+
+Don't try to make sense of all of this on a first read. There will be plenty of
+examples that will hopefully help make things more concrete as we go along.
+
+```haskell
+```
+
+##### Generating and shrinking
+
+```haskell
+```
+
+##### Running and assertion checking
+
+```haskell
+```
+
+#### Prior work
+
+I'd like to explain where my inspiration is coming from, because I think it's
+important to note that the code I'm about to present didn't come from thin air
+(even though it might look simple).
+
+I've been thinking about this problem since the end of 2016 as can be witnesed
+by my involvement in the following
+[issue](https://github.com/nick8325/quickcheck/issues/139) about adding stateful
+testing to Haskell's QuickCheck.
+
+My initial attempt eventually turned into the Haskell library
+`quickcheck-state-machine`.
+
+The version below is a combination of my experience building that library, but
+also inspried by:
+
+  1. Nick Smallbone's initial
+  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
+  (2017) from that same issue. (Nick was, and I think still is, the main
+  maintainer of the original QuickCheck library);
+
+  2. John's Midlands Graduate School
+  [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
+
+  3. Edsko de Vries' "lockstep"
+  [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
+
+XXX: I'll refer back to these when I motivate my design decisions below.
 
 #### Example: array-based queue
 
@@ -873,30 +908,29 @@ strange, but I hope that it will become more clear when we model `new`.
 data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
   deriving (Eq, Show)
 
-
-fnew :: Int -> State -> Either Err (State, Var Queue)
-fnew sz s =
+fNew :: Int -> FakeOp (Var Queue)
+fNew sz s =
   let
-    v = Var (Map.size s)
+    v  = Var (Map.size s)
+    s' = Map.insert v (FQueue [] sz) s
   in
-    return (Map.insert v (FQueue [] sz) s, v)
+    return (s', v)
 
-fput :: Var Queue -> Int -> State -> Either Err (State, ())
-fput q i s
+fPut :: Var Queue -> Int -> State -> Either Err (State, ())
+fPut q i s
   | q `Map.notMember` s = Left QueueDoesNotExist
   | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Left QueueIsFull
   | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
 
-fget :: Var Queue -> State -> Either Err (State, Int)
-fget q s
-  | q `Map.notMember` s        = Left QueueDoesNotExist
-  | null (fqElems (s Map.! q)) = Left QueueIsEmpty
+fGet :: Var Queue -> FakeOp Int
+fGet q s
+  | q `Map.notMember` s = Left QueueDoesNotExist
   | otherwise = case fqElems (s Map.! q) of
-      [] -> error "fget: impossible, we checked that it's non-empty"
+      []     -> Left QueueIsEmpty
       i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
 
-fsize :: Var Queue -> State -> Either Err (State, Int)
-fsize q s
+fSize :: Var Queue -> State -> Either Err (State, Int)
+fSize q s
   | q `Map.notMember` s = Left QueueDoesNotExist
   | otherwise           = return (s, length (fqElems (s Map.! q)))
 ```
@@ -939,10 +973,10 @@ instance StateModel State where
   shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
   shrinkCommand _s _cmd = []
 
-  runFake (New sz)  s = fmap New_  <$> fnew sz s
-  runFake (Put q i) s = fmap Put_  <$> fput q i s
-  runFake (Get q)   s = fmap Get_  <$> fget q s
-  runFake (Size q)  s = fmap Size_ <$> fsize q s
+  runFake (New sz)  s = fmap New_  <$> fNew sz s
+  runFake (Put q i) s = fmap Put_  <$> fPut q i s
+  runFake (Get q)   s = fmap Get_  <$> fGet q s
+  runFake (Size q)  s = fmap Size_ <$> fSize q s
 
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i

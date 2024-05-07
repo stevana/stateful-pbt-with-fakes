@@ -32,9 +32,10 @@ type FakeOp a = State -> Either Err (State, a)
 fNew :: Int -> FakeOp (Var Queue)
 fNew sz s =
   let
-    v = Var (Map.size s)
+    v  = Var (Map.size s)
+    s' = Map.insert v (FQueue [] sz) s
   in
-    return (Map.insert v (FQueue [] sz) s, v)
+    return (s', v)
 
 fPut :: Var Queue -> Int -> FakeOp ()
 fPut q i s
@@ -44,10 +45,9 @@ fPut q i s
 
 fGet :: Var Queue -> FakeOp Int
 fGet q s
-  | q `Map.notMember` s        = Left QueueDoesNotExist
-  | null (fqElems (s Map.! q)) = Left QueueIsEmpty
+  | q `Map.notMember` s = Left QueueDoesNotExist
   | otherwise = case fqElems (s Map.! q) of
-      [] -> error "fget: impossible, we checked that it's non-empty"
+      []     -> Left QueueIsEmpty
       i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
 
 fSize :: Var Queue -> FakeOp Int
