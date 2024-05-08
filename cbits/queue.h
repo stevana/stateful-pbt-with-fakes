@@ -12,5 +12,6 @@ void put(Queue *q, int n);
 int get(Queue *q);
 int size(Queue *q);
 int sizeBroken(Queue *q);
+int sizeBroken2(Queue *q);
 
 #endif

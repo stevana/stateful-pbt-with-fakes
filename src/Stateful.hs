@@ -55,7 +55,6 @@ class ( Monad (CommandMonad state)
   type PreconditionFailure state = Void
 
 
-  --
   generateCommand :: state -> Gen (Command state (Var (Reference state)))
 
   shrinkCommand :: state -> Command state (Var (Reference state))
@@ -196,7 +195,9 @@ runCommands (Commands cmds0) = go initialState [] cmds0
     go _state _env [] = return ()
     go  state  env (cmd : cmds) = do
       case runFake cmd state of
-        Left _err -> pre False
+        Left _err -> do
+          monitor $ counterexample "Preconditon failed"
+          assert False
         Right (state', resp) -> do
           let name = commandName cmd
           monitor (tabulate "Commands" [name] . classify True name)

@@ -46,12 +46,14 @@ instance StateModel State where
       [ New . getPositive <$> arbitrary
       , Put  <$> arbitraryQueue <*> arbitrary
       , Get  <$> arbitraryQueue
+      -- NOTE: Uncomment once precondition for put has been added and the property passes.
       , Size <$> arbitraryQueue
       ]
     where
       arbitraryQueue :: Gen (Var Queue)
-      arbitraryQueue = Var <$> choose (0, Map.size s - 1)
+      arbitraryQueue = elements (Map.keys s)
 
+  shrinkCommand _s (New i)   = [ New i'   | Positive i' <- shrink (Positive i) ]
   shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
   shrinkCommand _s _cmd = []
 
@@ -63,7 +65,7 @@ instance StateModel State where
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i
   runReal (Get q)   = Get_  <$> get q
-  runReal (Size q)  = Size_ <$> size q
+  runReal (Size q)  = Size_ <$> sizeBroken2 q
 
   runCommandMonad _ = id
 
@@ -71,3 +73,22 @@ prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do
   runCommands cmds
   assert True
+
+unit_queueFull :: IO ()
+unit_queueFull = quickCheck (withMaxSuccess 1 (prop_queue cmds))
+  where
+    cmds = Commands
+      [ New 1
+      , Put (Var 0) 1
+      , Put (Var 0) 0
+      , Get (Var 0)
+      ]
+
+unit_queueSize :: IO ()
+unit_queueSize = quickCheck (withMaxSuccess 1 (prop_queue cmds))
+  where
+    cmds = Commands
+      [ New 1
+      , Put (Var 0) 0
+      , Size (Var 0)
+      ]

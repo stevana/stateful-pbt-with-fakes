@@ -40,6 +40,7 @@ fNew sz s =
 fPut :: Var Queue -> Int -> FakeOp ()
 fPut q i s
   | q `Map.notMember` s = Left QueueDoesNotExist
+  -- NOTE: Uncomment after queueFull test failure has been found.
   | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Left QueueIsFull
   | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
 

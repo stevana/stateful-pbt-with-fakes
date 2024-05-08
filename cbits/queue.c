@@ -35,3 +35,7 @@ int size(Queue *q) {
 int sizeBroken(Queue *q) {
   return (q->inp - q->outp) % q->size;
 }
+
+int sizeBroken2(Queue *q) {
+  return abs(q->inp - q->outp) % q->size;
+}

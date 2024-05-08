@@ -560,9 +560,9 @@ All examples, in the rest of this post, will have three parts:
 
 The first part is independent of the stateful testing library we are building.
 The second part is hooking up the first part to the library by implementing an
-interface (type class). I'll show you the definition of the type class after the
-example. While the final part is how to write the actual property and interpret
-the output from running them.
+interface (type class). We'll look at the definition of the type class after the
+example. The final part is how to write the actual property and interpret the
+output from running them.
 
 ##### Software under test
 
@@ -692,7 +692,7 @@ incr42Bug :: IO ()
 incr42Bug = do
   n <- readIORef gLOBAL_COUNTER
   let n' = if n == 42
-           then n
+           then n -- BUG
            else n + 1
   writeIORef gLOBAL_COUNTER n'
 ```
@@ -765,74 +765,181 @@ bug and then 29 shrink steps for QuickCheck to minimise it.
 
 #### Library implementation
 
-There are three parts to the implementation. First the stateful testing
-interface (or type class), this is what the user needs to implement, the rest of
-the library is programmed against this interface and provides the testing
-functionality. The second part is generating and shrinking sequences of inputs,
-which is derived from the interfaces ability to generate and shrink individual
-inputs. The third and final part is about executing the generated inputs against
-the real component and the model as well as checking that they conform.
+In the example above we implemented the `StateModel` interface (or type class),
+next we'll have a look at the definiton of this interface and the testing
+functionality we can derive by programming against the interface.
 
 ##### Stateful testing interface
 
-The following is the interface which the user of the library has to implement in
-order for the library to provide the stateful property-based testing
-functionality.
-
-Don't try to make sense of all of this on a first read. There will be plenty of
-examples that will hopefully help make things more concrete as we go along.
-
 ```haskell
+class ( ... ) => StateModel state where
+
+  -- If we think of the system under test as a black box, then commands are the
+  -- inputs and responses the outputs to the black box.
+  data Command  state :: Type -> Type
+  data Response state :: Type -> Type
+
+  -- Sometimes a command needs to refer to a previous response, e.g. when a file
+  -- is opened we get a handle which is later refered to when writing or reading
+  -- form the file. File handles, and similar constructs, are called references
+  -- and can be part of commands and responses.
+  type Reference state :: Type
+
+  -- Not all commands are valid in all states. Pre-conditions allow the user to
+  -- specify when a command is safe to execute, for example we cannot write or
+  -- read to or from an unopened file. The `PreconditionFailure` data type
+  -- allows the user to create custom pre-condition failures. By default now
+  -- pre-condition failures are allowed, thus the `Void` (empty) type.
+  type PreconditionFailure state :: Type
+  type PreconditionFailure state = Void
+
+
+  generateCommand :: state -> Gen (Command state (Var (Reference state)))
+
+  shrinkCommand :: state -> Command state (Var (Reference state))
+                -> [Command state (Var (Reference state))]
+  shrinkCommand _state _cmd = []
+
+  initialState :: state
+
+  runFake :: Command state (Var (Reference state)) -> state
+          -> Either (PreconditionFailure state)
+                    (state, Response state (Var (Reference state)))
+
+  runReal :: Command state (Reference state)
+          -> CommandMonad state (Response state (Reference state))
+
+  monitoring :: (state, state)
+             -> Command state (Reference state)
+             -> Response state (Reference state)
+             -> Property -> Property
+  monitoring _states _cmd _resp = id
+
+  commandName :: (Show (Command state ref), Show ref)
+              => Command state ref -> String
+  commandName = head . words . show
+
+  -- Most often the result of executing a command against the system under test
+  -- will live in the IO monad, but sometimes it can be useful to be able a
+  -- choose another monad.
+  type CommandMonad state :: Type -> Type
+  type CommandMonad state = IO
+
+data Var a = Var Int
+  deriving stock (Show, Eq, Ord)
 ```
 
 ##### Generating and shrinking
 
 ```haskell
+newtype Commands state = Commands
+  { unCommands :: [Command state (Var (Reference state))] }
+deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
+
+-- The precondition for a command is the same as the fake returning a value.
+precondition :: StateModel state
+             => state -> Command state (Var (Reference state)) -> Bool
+precondition s cmd = case runFake cmd s of
+  Left _  -> False
+  Right _ -> True
+
+-- Get the next state by running the fake. Assumes that the precondition holds.
+nextState :: StateModel state
+          => state -> Command state (Var (Reference state)) -> state
+nextState s cmd = case runFake cmd s of
+  Right (s', _) -> s'
+  Left _err -> error "nextState: impossible, we checked for success in precondition"
+
+instance StateModel state => Arbitrary (Commands state) where
+
+  arbitrary :: Gen (Commands state)
+  arbitrary = Commands <$> genCommands initialState
+    where
+      genCommands :: StateModel state
+                  => state -> Gen [Command state (Var (Reference state))]
+      genCommands s = sized $ \n ->
+        let
+          w = n `div` 2 + 1
+        in
+          frequency
+            [ (1, return [])
+            , (w, do mcmd <- generateCommand s `suchThatMaybe` precondition s
+                     case mcmd of
+                       Nothing  -> return []
+                       Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
+            ]
+
+  shrink :: Commands state -> [Commands state]
+  shrink (Commands cmds) =
+    map (Commands . prune . map fst)
+        (shrinkList shrinker (snd (withStates initialState cmds)))
+    where
+      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+
+withStates :: StateModel state
+           => state -> [Command state (Var (Reference state))]
+           -> (state, [(Command state (Var (Reference state)), state)])
+withStates s0 = go s0 []
+  where
+    go s acc []           = (s, reverse acc)
+    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
+
+prune :: StateModel state
+      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
+prune = go initialState
+  where
+    go _s [] = []
+    go  s (cmd : cmds)
+      | precondition s cmd = cmd : go (nextState s cmd) cmds
+      | otherwise          = go s cmds
 ```
 
 ##### Running and assertion checking
 
 ```haskell
+runCommands :: forall state. StateModel state
+            => Commands state -> PropertyM (CommandMonad state) ()
+runCommands (Commands cmds0) = go initialState [] cmds0
+  where
+    go :: state -> [(Int, Reference state)] -> [Command state (Var (Reference state))]
+       -> PropertyM (CommandMonad state) ()
+    go _state _env [] = return ()
+    go  state  env (cmd : cmds) = do
+      case runFake cmd state of
+        Left _err -> pre False
+        Right (state', resp) -> do
+          let name = commandName cmd
+          monitor (tabulate "Commands" [name] . classify True name)
+          let ccmd = fmap (lookupEnv env) cmd
+          cresp <- run (runReal ccmd)
+          monitor (counterexample (show cmd ++ " --> " ++ show cresp))
+          monitor (monitoring (state, state') ccmd cresp)
+          let refs   = toList cresp
+              env'   = env ++ zip [length env..] refs
+              cresp' = fmap (lookupEnv env') resp
+              ok     = cresp == cresp'
+          unless ok $
+            monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
+          assert ok
+          go state' env' cmds
+
+lookupEnv :: [(Int, a)] -> Var a -> a
+lookupEnv env (Var x) =
+  case lookup x env of
+    Nothing  -> discard -- ^ This can happen if a shrink step makes a variable unbound.
+    Just ref -> ref
 ```
 
-#### Prior work
-
-I'd like to explain where my inspiration is coming from, because I think it's
-important to note that the code I'm about to present didn't come from thin air
-(even though it might look simple).
-
-I've been thinking about this problem since the end of 2016 as can be witnesed
-by my involvement in the following
-[issue](https://github.com/nick8325/quickcheck/issues/139) about adding stateful
-testing to Haskell's QuickCheck.
-
-My initial attempt eventually turned into the Haskell library
-`quickcheck-state-machine`.
-
-The version below is a combination of my experience building that library, but
-also inspried by:
-
-  1. Nick Smallbone's initial
-  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
-  (2017) from that same issue. (Nick was, and I think still is, the main
-  maintainer of the original QuickCheck library);
-
-  2. John's Midlands Graduate School
-  [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
-
-  3. Edsko de Vries' "lockstep"
-  [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
-
-XXX: I'll refer back to these when I motivate my design decisions below.
-
 #### Example: array-based queue
+
+XXX: an example that introduces pre-conditions and references...
 
 The next example is an array-based queue written in C. This example is taken
 from John's paper [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014).
 
-##### SUT
+##### Software under test
 
 The implementation uses two indices which keep track of the front and back of
 the queue, this allows us to implement the queue in a circular buffer fashion.
@@ -919,7 +1026,6 @@ fNew sz s =
 fPut :: Var Queue -> Int -> State -> Either Err (State, ())
 fPut q i s
   | q `Map.notMember` s = Left QueueDoesNotExist
-  | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Left QueueIsFull
   | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
 
 fGet :: Var Queue -> FakeOp Int
@@ -964,11 +1070,10 @@ instance StateModel State where
       [ New . getPositive <$> arbitrary
       , Put  <$> arbitraryQueue <*> arbitrary
       , Get  <$> arbitraryQueue
-      , Size <$> arbitraryQueue
       ]
     where
       arbitraryQueue :: Gen (Var Queue)
-      arbitraryQueue = Var <$> choose (0, Map.size s - 1)
+      arbitraryQueue = elements (Map.keys s)
 
   shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
   shrinkCommand _s _cmd = []
@@ -993,13 +1098,157 @@ prop_queue cmds = monadicIO $ do
   assert True
 ```
 
-+ regression tests?
+```
+   *** Failed! Assertion failed (after 7 tests and 5 shrinks):
+    Commands {unCommands = [New 1,Put (Var 0) 0,Put (Var 0) 1,Get (Var 0)]}
+    New 1 --> New_ (Queue 0x00000000016e9010)
+    Put (Var 0) 0 --> Put_ ()
+    Put (Var 0) 1 --> Put_ ()
+    Get (Var 0) --> Get_ 1
+    Expected: Get_ 0
+    Got: Get_ 1
+```
 
-#### Example: process registry
+* Circular buffer rewrites the first entry, implementation is correct, model is wrong.
 
-This example comes from the paper [*QuickCheck testing for fun and
-profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
-(2007) and is also part of John's Midlands Graduate School course (2019).
+```diff
+fPut :: Var Queue -> Int -> State -> Either Err (State, ())
+fPut q i s
+  | q `Map.notMember` s = Left QueueDoesNotExist
++ | length (fqElems (s Map.! q)) >= fqSize (s Map.! q) = Left QueueIsFull
+  | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
+```
+
+```haskell
+unit_queueFull :: IO ()
+unit_queueFull = quickCheck (withMaxSuccess 1 (prop_queue cmds))
+  where
+    cmds = Commands
+      [ New 1
+      , Put (Var 0) 1
+      , Put (Var 0) 0
+      , Get (Var 0)
+      ]
+```
+
+```
+*** Failed! Assertion failed (after 1 test):
+New 1 --> New_ (Queue 0x00000000006f6d20)
+Put (Var 0) 1 --> Put_ ()
+Preconditon failed
+```
+
+```
+>>> quickCheck prop_queue
++++ OK, passed 100 tests:
+95% New
+86% Put
+67% Get
+
+Commands (2497 in total):
+44.13% New
+41.25% Put
+14.62% Get
+```
+
+```diff
+  generateCommand s
+    | Map.null s = New . getPositive <$> arbitrary
+    | otherwise  = oneof
+      [ New . getPositive <$> arbitrary
+      , Put  <$> arbitraryQueue <*> arbitrary
+      , Get  <$> arbitraryQueue
++     , Size <$> arbitraryQueue
+      ]
+```
+
+```
+>>> quickCheck prop_queue
+*** Failed! Assertion failed (after 25 tests and 8 shrinks):
+Commands {unCommands = [New 1,Put (Var 0) 0,Size (Var 0)]}
+New 1 --> New_ (Queue 0x0000000001444220)
+Put (Var 0) 0 --> Put_ ()
+Size (Var 0) --> Size_ 0
+Expected: Size_ 1
+Got: Size_ 0
+```
+
+```diff
+  Queue *new(int n) {
+-   int *buff = malloc(n*sizeof(int));
+-   Queue q = {buff,0,0,n};
++   int *buff = malloc((n + 1)*sizeof(int));
++   Queue q = {buff,0,0,n + 1};
+    Queue *qptr = malloc(sizeof(Queue));
+    *qptr = q;
+    return qptr;
+}
+```
+
+```haskell
+unit_queueSize :: IO ()
+unit_queueSize = quickCheck (withMaxSuccess 1 (prop_queue cmds))
+  where
+    cmds = Commands
+      [ New 1
+      , Put (Var 0) 0
+      , Size (Var 0)
+      ]
+```
+
+```
+*** Failed! Assertion failed (after 38 tests and 12 shrinks):
+Commands {unCommands = [New 1,Put (Var 0) 0,Get (Var 0),Put (Var 0) 0,Size (Var 0)]}
+New 1 --> New_ (Queue 0x00007fd47c00a920)
+Put (Var 0) 0 --> Put_ ()
+Get (Var 0) --> Get_ 0
+Put (Var 0) 0 --> Put_ ()
+Size (Var 0) --> Size_ (-1)
+Expected: Size_ 1
+Got: Size_ (-1)
+```
+
+```diff
+  int size(Queue *q) {
+-   return (q->inp - q->outp) % q->size;
++   return abs(q->inp - q->outp) % q->size;
+  }
+```
+
+```
+>>> quickCheck prop_queue
++++ OK, passed 100 tests:
+93% New
+79% Put
+74% Size
+59% Get
+
+Commands (2340 in total):
+32.09% New
+29.06% Size
+28.25% Put
+10.60% Get
+
+>>> quickCheck prop_queue
+*** Failed! Assertion failed (after 56 tests and 19 shrinks):
+Commands {unCommands = [New 2,Put (Var 0) 0,Put (Var 0) 0,Get (Var 0),Put (Var 0) 0,Size (Var 0)]}
+New 2 --> New_ (Queue 0x00007fbf4c006490)
+Put (Var 0) 0 --> Put_ ()
+Put (Var 0) 0 --> Put_ ()
+Get (Var 0) --> Get_ 0
+Put (Var 0) 0 --> Put_ ()
+Size (Var 0) --> Size_ 1
+Expected: Size_ 2
+Got: Size_ 1
+```
+
+```diff
+  int size(Queue *q) {
+-   return abs(q->inp - q->outp) % q->size;
++   return (q->inp - q->outp + q->size) % q->size;
+  }
+```
+
 
 #### Example: jug puzzle from Die Hard 3
 
@@ -1324,6 +1573,14 @@ stateful and parallel testing.
 
 #### Implementation
 
+XXX: extend StateModel class:
+
+```haskell
+  -- If another command monad is used we need to provide a way run it inside the
+  -- IO monad. This is only needed for parallel testing, because IO is the only
+  -- monad we can execute on different threads.
+  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
+```
 ##### Parallel program generation and shrinking
 
 
@@ -1347,7 +1604,11 @@ sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550
 ```haskell
 ```
 
-#### Example: parallel process registry
+#### Example: process registry
+
+This example comes from the paper [*QuickCheck testing for fun and
+profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
+(2007) and is also part of John's Midlands Graduate School course (2019).
 
 The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
@@ -1398,6 +1659,38 @@ iServiceA :: IServiceB -> IO IServiceA
 * Stateful and parallel test C, this gives us a fake of C which is contract tested
 * Use C fake when integration testing B
 * Use B fake (which uses the C fake) when testing A
+
+### Prior work
+
+#### Stateful
+
+I'd like to explain where my inspiration is coming from, because I think it's
+important to note that the code I'm about to present didn't come from thin air
+(even though it might look simple).
+
+I've been thinking about this problem since the end of 2016 as can be witnesed
+by my involvement in the following
+[issue](https://github.com/nick8325/quickcheck/issues/139) about adding stateful
+testing to Haskell's QuickCheck.
+
+My initial attempt eventually turned into the Haskell library
+`quickcheck-state-machine`.
+
+The version below is a combination of my experience building that library, but
+also inspried by:
+
+  1. Nick Smallbone's initial
+  [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
+  (2017) from that same issue. (Nick was, and I think still is, the main
+  maintainer of the original QuickCheck library);
+
+  2. John's Midlands Graduate School
+  [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
+
+  3. Edsko de Vries' "lockstep"
+  [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
+
+XXX: I'll refer back to these when I motivate my design decisions below.
 
 
 ## Conclusion and future work

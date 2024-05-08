@@ -35,8 +35,9 @@ foreign import capi "queue.h put"  put_  :: Ptr CQueue -> CInt -> IO ()
 foreign import capi "queue.h get"  get_  :: Ptr CQueue -> IO CInt
 foreign import capi "queue.h size" size_ :: Ptr CQueue -> IO CInt
 
-foreign import capi "queue.h newBroken"  newBroken_  :: CInt -> IO (Ptr CQueue)
-foreign import capi "queue.h sizeBroken" sizeBroken_ :: Ptr CQueue -> IO CInt
+foreign import capi "queue.h newBroken"   newBroken_   :: CInt -> IO (Ptr CQueue)
+foreign import capi "queue.h sizeBroken"  sizeBroken_  :: Ptr CQueue -> IO CInt
+foreign import capi "queue.h sizeBroken2" sizeBroken2_ :: Ptr CQueue -> IO CInt
 
 ------------------------------------------------------------------------
 
@@ -70,3 +71,7 @@ size (Queue fptr) = withForeignPtr fptr $ \q ->
 sizeBroken :: Queue -> IO Int
 sizeBroken (Queue fptr) = withForeignPtr fptr $ \q ->
   fromIntegral <$> sizeBroken_ q
+
+sizeBroken2 :: Queue -> IO Int
+sizeBroken2 (Queue fptr) = withForeignPtr fptr $ \q ->
+  fromIntegral <$> sizeBroken2_ q
