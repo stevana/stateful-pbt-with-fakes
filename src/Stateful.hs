@@ -45,6 +45,7 @@ class ( Monad (CommandMonad state)
   -- form the file. File handles, and similar constructs, are called references
   -- and can be part of commands and responses.
   type Reference state :: Type
+  type Reference state = Void
 
   -- Not all commands are valid in all states. Pre-conditions allow the user to
   -- specify when a command is safe to execute, for example we cannot write or

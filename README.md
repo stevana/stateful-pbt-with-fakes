@@ -771,36 +771,31 @@ functionality we can derive by programming against the interface.
 
 ##### Stateful testing interface
 
+Let me give you the full definition of the interface and then I'll explain it in
+words afterwards.
+
 ```haskell
 class ( ... ) => StateModel state where
 
-  -- If we think of the system under test as a black box, then commands are the
-  -- inputs and responses the outputs to the black box.
+  initialState :: state
+
   data Command  state :: Type -> Type
   data Response state :: Type -> Type
 
-  -- Sometimes a command needs to refer to a previous response, e.g. when a file
-  -- is opened we get a handle which is later refered to when writing or reading
-  -- form the file. File handles, and similar constructs, are called references
-  -- and can be part of commands and responses.
   type Reference state :: Type
+  type Reference state = Void
 
-  -- Not all commands are valid in all states. Pre-conditions allow the user to
-  -- specify when a command is safe to execute, for example we cannot write or
-  -- read to or from an unopened file. The `PreconditionFailure` data type
-  -- allows the user to create custom pre-condition failures. By default now
-  -- pre-condition failures are allowed, thus the `Void` (empty) type.
   type PreconditionFailure state :: Type
   type PreconditionFailure state = Void
 
+  type CommandMonad state :: Type -> Type
+  type CommandMonad state = IO
 
   generateCommand :: state -> Gen (Command state (Var (Reference state)))
 
   shrinkCommand :: state -> Command state (Var (Reference state))
                 -> [Command state (Var (Reference state))]
   shrinkCommand _state _cmd = []
-
-  initialState :: state
 
   runFake :: Command state (Var (Reference state)) -> state
           -> Either (PreconditionFailure state)
@@ -818,16 +813,56 @@ class ( ... ) => StateModel state where
   commandName :: (Show (Command state ref), Show ref)
               => Command state ref -> String
   commandName = head . words . show
-
-  -- Most often the result of executing a command against the system under test
-  -- will live in the IO monad, but sometimes it can be useful to be able a
-  -- choose another monad.
-  type CommandMonad state :: Type -> Type
-  type CommandMonad state = IO
-
-data Var a = Var Int
-  deriving stock (Show, Eq, Ord)
 ```
+
+The interface is parametrised by a `state` type that the user needs to define
+before instantiating the interface. In the counter example `state` is `newtype
+Counter = Counter Int`. The user needs to provide an `initialState :: state`
+from which we'll start generating commands and executing the model, in the
+counter case this is `Counter 0`.
+
+As part of the instantiating the user also needs to specify a type of `Command`s
+and `Response`s, these were the `Incr` and `Get` operations of the counter and
+their response types respectively.
+
+In addition there's also three optional types, that we've not needed in the
+counter example. The first is references, these are used to refer back to
+previously created resources. For example if we open a file handle on a
+POSIX-like filesystem, then later commands need to be able to refer to that file
+handle when wanting to write or read from it. The second datatype is
+`PreconditionFailure`, which is used to give a nice error message when a command
+is executed in a disallowed state. For example if we try to read from a file
+handle that has been closed. The third data type is `CommandMonad` which let's
+us use a different monad than `IO` for executing our commands in. After we've
+finished with the interface definition we'll come back to more examples where
+we'll use these optional types, hopefully these examples will help make things
+more concrete.
+
+We've already seen that the user needs to provide a way to generate single
+commands, the only thing worth mentioning is that in case our commands are
+parametrised by references then during the generation phase we only deal with
+`Var`s of references, where `data Var a = Var Int`. The reason for this is that
+we cannot generate, for example, real file handles (only the operating system
+can), so instead we generate symbolic references which are just `Int`s. Think of
+these as placeholders for which real references will be substituted in once the
+real references are created during execution.
+
+Shrinking of individual commands is optional and disabled by default, but as
+we've seen this doesn't exclude the sequence of commands to be shrunk. We'll
+shall see shortly how that is done in detail.
+
+Next up we got `runFake` and `runReal` which executes a command against the
+`state` model and the real system respectively. Notice how `runFake` can fail
+with a `PreconditionFailure`, whereas `runReal` is always expected to succeed
+(because if a command fails the precondition check, then it won't get generated
+and hence never reach `runReal`). Another difference is that `runFake` uses
+symbolic references, while `runReal` deals with real references. We'll shortly
+see how this substitution of references works.
+
+Lastly we have two optional functions related to keeping statistics of generated
+test cases, which is useful for coverage reporting among other things. We'll
+come back to how these can be used as we look at more examples after we've
+defined our stateful property-based testing library.
 
 ##### Generating and shrinking
 
@@ -1614,6 +1649,8 @@ The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (2009)
+
+Parallel property still fails sometimes... E.g. `--quickcheck-replay=300529`
 
 ```haskell
 ```
