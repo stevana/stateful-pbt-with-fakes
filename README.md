@@ -989,8 +989,8 @@ runCommands (Commands cmds0) = go initialState [] cmds0
     go _state _env [] = return ()
     go  state  env (cmd : cmds) = do
       case runFake cmd state of
-        Left _err -> do
-          monitor (counterexample "Preconditon failed")
+        Left err -> do
+          monitor (counterexample ("Preconditon failed: " ++ show err))
           assert False
         Right (state', resp) -> do
           let name = commandName cmd
@@ -1216,12 +1216,16 @@ them in later `Command`s.
 
 ##### Testing
 
+Having implemented the interface, we can write our property as follows.
+
 ```haskell
 prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do
   runCommands cmds
   assert True
 ```
+
+When we run it, using `quickCheck prop_queue`, we get the following error.
 
 ```
    *** Failed! Assertion failed (after 7 tests and 5 shrinks):
@@ -1234,7 +1238,13 @@ prop_queue cmds = monadicIO $ do
     Got: Get_ 1
 ```
 
-* Circular buffer rewrites the first entry, implementation is correct, model is wrong.
+So we create a new queue of size `1`, put two items (`0` and `1`) into it, and
+finally we read a value from the queue and this is where the assertion fails. Or
+model returns `0`, because it's a FIFO queue, but the C code returns `1`. The
+reason for this is that in the C code there's no error checking, so writing a
+value to a full queue simply overwrites the oldest value. So there's actually
+nothing wrong with the implementation, but rather the model is wrong. We've
+forgotten a precondition:
 
 ```diff
  data Err
@@ -1251,9 +1261,12 @@ fPut q i s
   | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
 ```
 
+We can add the counterexample that we got as a regression test to our testsuite
+as follows:
+
 ```haskell
 unit_queueFull :: IO ()
-unit_queueFull = quickCheck (withMaxSuccess 1 (prop_queue cmds))
+unit_queueFull = quickCheck (withMaxSuccess 1 (expectFailure (prop_queue cmds)))
   where
     cmds = Commands
       [ New 1
@@ -1263,12 +1276,20 @@ unit_queueFull = quickCheck (withMaxSuccess 1 (prop_queue cmds))
       ]
 ```
 
+Notice that we can basically copy-paste `cmds` from QuickCheck's output, but
+I've done some formatting here to make it more readable.
+
+After fixing the precondition for `fPut`, `unit_queueFull` fails as follows:
+
 ```
-*** Failed! Assertion failed (after 1 test):
++++ OK, failed as expected. Assertion failed (after 1 test):
 New 1 --> New_ (Queue 0x00000000006f6d20)
 Put (Var 0) 1 --> Put_ ()
-Preconditon failed
+Preconditon failed: QueueIsFull
 ```
+
+When we rerun `quickCheck prop_queue` we will not generate this example again,
+because all preconditions need to hold, and the property passes:
 
 ```
 >>> quickCheck prop_queue
@@ -1283,6 +1304,9 @@ Commands (2497 in total):
 14.62% Get
 ```
 
+However as we can see in the output there's no coverage for `Size`! The reason
+for this is because we've forgot to add it to our generator:
+
 ```diff
   generateCommand s
     | Map.null s = New . getPositive <$> arbitrary
@@ -1294,6 +1318,8 @@ Commands (2497 in total):
       ]
 ```
 
+After adding it and rerunning the property, we get the following error:
+
 ```
 >>> quickCheck prop_queue
 *** Failed! Assertion failed (after 25 tests and 8 shrinks):
@@ -1304,6 +1330,29 @@ Size (Var 0) --> Size_ 0
 Expected: Size_ 1
 Got: Size_ 0
 ```
+
+Size should return how many items are in the queue, so after we put one item
+into a queue we expect it to return `1`, but in the above counterexample it
+returns `0`.
+
+To understand why this happens we have to look at how `put` and `size` are implemented:
+
+```c
+void put(Queue *q, int n) {
+  q->buf[q->inp] = n;
+  q->inp = (q->inp + 1) % q->size;
+}
+
+int size(Queue *q) {
+  return (q->inp - q->outp) % q->size;
+}
+```
+
+In `put` when we do `q->inp = (q->inp + 1) % q->size` we get `q->inp = (0 + 1) %
+1 == 0` and then when we calculate the `size` we get `(0 - 0) % 1 == 0`. One way
+to fix this is to make `q->size` be `n + 1` rather than `n` where `n` is the
+size parameter of `new`, that way `put` will do `q->inp = (0 + 1) % 2 == 1`
+instead and size will be `1 - 0 % 2 == 1` which is correct. Here's the diff:
 
 ```diff
   Queue *new(int n) {
@@ -1317,6 +1366,8 @@ Got: Size_ 0
 }
 ```
 
+As before, we can add a regression test for the size issue as follows:
+
 ```haskell
 unit_queueSize :: IO ()
 unit_queueSize = quickCheck (withMaxSuccess 1 (prop_queue cmds))
@@ -1327,6 +1378,9 @@ unit_queueSize = quickCheck (withMaxSuccess 1 (prop_queue cmds))
       , Size (Var 0)
       ]
 ```
+
+After the change to `new` this test passes, but if we rerun the property we get
+the following error:
 
 ```
 *** Failed! Assertion failed (after 38 tests and 12 shrinks):
@@ -1340,12 +1394,18 @@ Expected: Size_ 1
 Got: Size_ (-1)
 ```
 
+After the second `put` we'll have `q->inp = (1 + 1) % 2 == 0` while `q->outp =
+1` due to the `get` and so when we call `size` we get `0 - 1 % 2 == -1`. Taking
+the absolute value:
+
 ```diff
   int size(Queue *q) {
 -   return (q->inp - q->outp) % q->size;
 +   return abs(q->inp - q->outp) % q->size;
   }
 ```
+
+Makes this test case pass, and in fact it also makes the property pass:
 
 ```
 >>> quickCheck prop_queue
@@ -1360,7 +1420,13 @@ Commands (2340 in total):
 29.06% Size
 28.25% Put
 10.60% Get
+```
 
+John says that at this point most programmers would probably be happy and
+believe that their implementation works, but if we rerun it again (or increase
+the amount of tests generated), we get:
+
+```
 >>> quickCheck prop_queue
 *** Failed! Assertion failed (after 56 tests and 19 shrinks):
 Commands {unCommands = [New 2,Put (Var 0) 0,Put (Var 0) 0,Get (Var 0),Put (Var 0) 0,Size (Var 0)]}
@@ -1374,6 +1440,11 @@ Expected: Size_ 2
 Got: Size_ 1
 ```
 
+We can see that all queues of size `1` now work, because this test starts by
+creating a queue of size `2`, so we've made progress. But taking the absolute
+value isn't the correct way to calculate the size (even though it works for
+queues of size `1`), the following is the correct way to do it:
+
 ```diff
   int size(Queue *q) {
 -   return abs(q->inp - q->outp) % q->size;
@@ -1381,6 +1452,9 @@ Got: Size_ 1
   }
 ```
 
+With this final tweak, the property passes. I hope that this somewhat long
+example gives you a feel for how property-based testing drives the development
+and debugging of code.
 
 #### Example: jug puzzle from Die Hard 3
 
@@ -1495,7 +1569,7 @@ When we run `quickcheck prop_dieHard` we get the following output:
 ```
 
 Notice how the trace shows the intermediate states, making it easy to verify
-that it's indeed a correct solution to the puzzle.
+that it's indeed a correct solution to the puzzle[^3].
 
 ### Parallel property-based testing in ~180 LOC
 
@@ -1886,3 +1960,17 @@ formal proof part, we should cherish such eduction opportunities.
 [^2]: There's some room for error here from the users side, e.g. the user could
     create non-unique refererences. In a proper library one might want to
     introduce a `genSym` construct which guarantees uniqueness.
+
+[^3]: So stateful property-based testing with a trivial `runReal` can be seen as
+    crude version of a random path exploring "model checker". One could perhaps
+    implement something closer to TLC (the model checker for TLA+), which
+    enumerates all paths up to some depth, by using `smallcheck` rather than
+    `QuickCheck`. If this topic interests you, you might also want to have a
+    look at Gabriella Gonzalez's
+    [HasCal](https://github.com/Gabriella439/HasCal).
+
+    I don't have an example for this, but I guess one can also think of stateful
+    property-based testing with a trivial `runFake` as a crude version of a
+    fuzzer (without coverage guidance). For more on this and how to add coverage
+    guidance, see [*Coverage guided, property based
+    testing*](https://dl.acm.org/doi/10.1145/3360607) (2019).
