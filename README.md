@@ -701,8 +701,8 @@ We also need to change the `runReal` function to use our buggy increment as
 follows.
 
 ```diff
-  - runReal Incr = Incr_ <$> incr
-  + runReal Incr = Incr_ <$> incr42Bug
+- runReal Incr = Incr_ <$> incr
++ runReal Incr = Incr_ <$> incr42Bug
 ```
 
 When we run the property now, we'll see something like the following output.
@@ -866,25 +866,52 @@ defined our stateful property-based testing library.
 
 ##### Generating and shrinking
 
+Once we have our interface we can start writing functions against the interface.
+These functions are what the user gets once they implement the interface. In
+this section we'll have a look at generation of sequences of `Commands`, which
+will be the inputs for our tests, and how to shrink said inputs to produce a
+minimal counterexample.
+
+Let's start by defining `Commands`, notice that they use symbolic references
+(i.e. `Var (Reference state)`):
+
 ```haskell
 newtype Commands state = Commands
   { unCommands :: [Command state (Var (Reference state))] }
-deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
+```
 
--- The precondition for a command is the same as the fake returning a value.
+As mentioned above, when we generate commands we cannot generate real
+references, e.g. file handles, thus `Var (Reference state)` is used which is
+isomorphic to just an `Int`.
+
+Sometimes it's convenient to split up `runFake` into two parts, the first checks
+if the command is allowed in the current state, i.e. the precondition holds:
+
+```haskell
 precondition :: StateModel state
              => state -> Command state (Var (Reference state)) -> Bool
 precondition s cmd = case runFake cmd s of
   Left _  -> False
   Right _ -> True
+```
 
--- Get the next state by running the fake. Assumes that the precondition holds.
+And the second part advances the state:
+
+```haskell
 nextState :: StateModel state
           => state -> Command state (Var (Reference state)) -> state
 nextState s cmd = case runFake cmd s of
   Right (s', _) -> s'
   Left _err -> error "nextState: impossible, we checked for success in precondition"
+```
 
+We assume that we'll only ever look at the `nextState` when the `precondition`
+holds.
+
+Using these two functions we can implement QuickCheck's `Arbitrary` type class
+for `Commands` which let's us generate and shrink `Commands`:
+
+```haskell
 instance StateModel state => Arbitrary (Commands state) where
 
   arbitrary :: Gen (Commands state)
@@ -910,7 +937,12 @@ instance StateModel state => Arbitrary (Commands state) where
         (shrinkList shrinker (snd (withStates initialState cmds)))
     where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+```
 
+Notice how when we shrink we first compute the state and then shrink the command
+at that state. We do so by help of the following helper function:
+
+```haskell
 withStates :: StateModel state
            => state -> [Command state (Var (Reference state))]
            -> (state, [(Command state (Var (Reference state)), state)])
@@ -918,7 +950,12 @@ withStates s0 = go s0 []
   where
     go s acc []           = (s, reverse acc)
     go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
+```
 
+Also notice how after shrinking we `prune` away all commands that don't pass the
+precondition:
+
+```haskell
 prune :: StateModel state
       => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
 prune = go initialState
@@ -929,7 +966,18 @@ prune = go initialState
       | otherwise          = go s cmds
 ```
 
+The intuition here is that as we remove commands from the originally generated
+`Commands` (which all pass their preconditions), we might have broken some
+preconditions and pruning simply removes the commands which we made invalid in
+the process of shrinking.
+
 ##### Running and assertion checking
+
+Once we've generated `Commands` we need to execute them against the model and
+the real system using `runFake` and `runReal`. In the process of doing so
+`runReal` will produce `Reference`s that later commands might use, so we also
+need to substitute symbolic references for real references. This, together
+coverage statatistics bookkeeping, is done in the `runCommands` function:
 
 ```haskell
 runCommands :: forall state. StateModel state
@@ -941,20 +989,27 @@ runCommands (Commands cmds0) = go initialState [] cmds0
     go _state _env [] = return ()
     go  state  env (cmd : cmds) = do
       case runFake cmd state of
-        Left _err -> pre False
+        Left _err -> do
+          monitor (counterexample "Preconditon failed")
+          assert False
         Right (state', resp) -> do
           let name = commandName cmd
           monitor (tabulate "Commands" [name] . classify True name)
+          -- Here we substitute all symbolic references for real ones:
           let ccmd = fmap (lookupEnv env) cmd
           cresp <- run (runReal ccmd)
           monitor (counterexample (show cmd ++ " --> " ++ show cresp))
           monitor (monitoring (state, state') ccmd cresp)
+          -- Here we collect all references from the response and store it in
+          -- our environment, so that subsequence commands can be substituted.
           let refs   = toList cresp
               env'   = env ++ zip [length env..] refs
               cresp' = fmap (lookupEnv env') resp
               ok     = cresp == cresp'
           unless ok $
             monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
+          -- And finally here's where we assert that the model and the real
+          -- implementation agree.
           assert ok
           go state' env' cmds
 
@@ -965,21 +1020,24 @@ lookupEnv env (Var x) =
     Just ref -> ref
 ```
 
-#### Example: array-based queue
+That's all the pieces we need to implement that `Counter` example that we saw
+above, plus some new constructs to deal with precondition failures and
+references.
 
-XXX: an example that introduces pre-conditions and references...
+Next let's have a look at an example where we need preconditions and references.
 
-The next example is an array-based queue written in C. This example is taken
-from John's paper [*Testing the hard stuff and staying
+#### Example: circular buffer
+
+This example is taken from John's paper [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014).
 
 ##### Software under test
 
-The implementation uses two indices which keep track of the front and back of
-the queue, this allows us to implement the queue in a circular buffer fashion.
-I've copied the C code straight from the paper and it contains a subtle bug, can
-you spot it?
+The implementation is written in C and uses two indices which keep track of the
+front and back of the queue, this allows us to implement the queue in a circular
+fashion. I've copied the C code straight from the paper. In order to test it
+from Haskell, we'll use Haskell's foreign function interface.
 
 ```c
 typedef struct queue {
@@ -1011,6 +1069,9 @@ int size(Queue *q) {
 }
 ```
 
+Notice that the C code doesn't do any error checking, e.g. if we `get` from an
+empty queue then we'll get back uninitialised memory.
+
 ##### Model
 
 The circular buffer implementation is very efficient, because it reuses the
@@ -1027,14 +1088,16 @@ data FQueue = FQueue
   }
 ```
 
-In the counter example above we only had one counter, so the model was merely a
-single integer. In this example, because of `new` returning a queue, we need to
-be able to model arbitrary many queues. We can this as follows:
+In the `Counter` example above we only had one counter, so the model was merely
+a single integer. In this example, because of `new` returning a queue, we need
+to be able to model arbitrary many queues. We can do this using symbolic
+references (`data Var a = Var Int`) as follows:
 
 ```haskell
 type State = Map (Var Queue) FQueue
 
-data Var a = Var Int
+emptyState :: State
+emptyState = Map.empty
 ```
 
 Where `Queue` is the Haskell data type that corresponds to the C `Queue` and the
@@ -1044,11 +1107,7 @@ real `Queue`s, merely symbolic references to them. This might seem a bit
 strange, but I hope that it will become more clear when we model `new`.
 
 ```haskell
-```
-
-```haskell
-data Err = QueueDoesNotExist | QueueIsFull | QueueIsEmpty
-  deriving (Eq, Show)
+type FakeOp a = State -> Either Err (State, a)
 
 fNew :: Int -> FakeOp (Var Queue)
 fNew sz s =
@@ -1057,8 +1116,24 @@ fNew sz s =
     s' = Map.insert v (FQueue [] sz) s
   in
     return (s', v)
+```
 
-fPut :: Var Queue -> Int -> State -> Either Err (State, ())
+As we have access to the state when defining our model, we can create new unique
+symbolic references by simply counting how many symbolic references we've
+created previously (using `Map.size`)[^2].
+
+As we said before, in the C code we don't do any error checking. In the model we
+do check that, for example, the queue is non-empty before we `fGet` an item.
+These are our preconditions.
+
+```haskell
+data Err
+  = QueueDoesNotExist
+  | QueueIsEmpty
+  deriving (Eq, Show)
+
+
+fPut :: Var Queue -> Int -> FakeOp ()
 fPut q i s
   | q `Map.notMember` s = Left QueueDoesNotExist
   | otherwise = return (Map.adjust (\fq -> fq { fqElems = fqElems fq ++ [i] }) q s, ())
@@ -1070,16 +1145,23 @@ fGet q s
       []     -> Left QueueIsEmpty
       i : is -> return (Map.adjust (\fq -> fq { fqElems = is }) q s, i)
 
-fSize :: Var Queue -> State -> Either Err (State, Int)
+fSize :: Var Queue -> FakeOp Int
 fSize q s
   | q `Map.notMember` s = Left QueueDoesNotExist
   | otherwise           = return (s, length (fqElems (s Map.! q)))
 ```
 
+Recall that we won't generate a get operation unless the precondition holds in
+the state that we are currently in, i.e. we will never generate gets if the
+queue is empty and thus we'll never execute the C code for `get` which gives
+back uninitialised memory.
+
+Having defined our model the interface implementation is almost mechanical.
+
 ```haskell
 instance StateModel State where
 
-  initialState = Map.empty
+  initialState = emptyState
 
   type Reference State = Queue
 
@@ -1118,11 +1200,19 @@ instance StateModel State where
   runFake (Get q)   s = fmap Get_  <$> fGet q s
   runFake (Size q)  s = fmap Size_ <$> fSize q s
 
+  -- Here `new`, `put`, `get` and `size` are FFI wrappers for their respective C
+  -- functions.
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i
   runReal (Get q)   = Get_  <$> get q
   runReal (Size q)  = Size_ <$> size q
 ```
+
+The only new thing worth paying attention to is the `q` in `Command` and
+`Response`, which is parametrised so that it works for both symbolic and real
+references. The `Functor` instance let's us to substitution, while `Foldable`
+let's us extract all new references from a response, so that we can substitute
+them in later `Command`s.
 
 ##### Testing
 
@@ -1145,6 +1235,13 @@ prop_queue cmds = monadicIO $ do
 ```
 
 * Circular buffer rewrites the first entry, implementation is correct, model is wrong.
+
+```diff
+ data Err
+   = QueueDoesNotExist
+   | QueueIsEmpty
++  | QueueIsFull
+```
 
 ```diff
 fPut :: Var Queue -> Int -> State -> Either Err (State, ())
@@ -1344,10 +1441,10 @@ instance StateModel Model where
                 , smallJug = small'
                 })
 
-  runReal :: Concrete Model -> IO (Response Model (Reference Model))
+  runReal :: Command Model Void -> IO (Response Model (Reference Model))
   runReal _cmd = return Done
 
-  monitoring :: (Model, Model) -> Concrete Model -> Response Model (Reference Model)
+  monitoring :: (Model, Model) -> Command Model Void -> Response Model Void
              -> Property -> Property
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"
@@ -1774,8 +1871,6 @@ Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-am
 formal specification to a lot of programmers without the tedious and laborious
 formal proof part, we should cherish such eduction opportunities.
 
-
-
 [^1]: Is there a source for this story? I can't remember where I've heard it.
     This short
     [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
@@ -1787,3 +1882,7 @@ formal proof part, we should cherish such eduction opportunities.
 
     I believe [this](https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/)
     must be the project mentioned above.
+
+[^2]: There's some room for error here from the users side, e.g. the user could
+    create non-unique refererences. In a proper library one might want to
+    introduce a `genSym` construct which guarantees uniqueness.

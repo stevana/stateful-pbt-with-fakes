@@ -197,7 +197,7 @@ runCommands (Commands cmds0) = go initialState [] cmds0
     go  state  env (cmd : cmds) = do
       case runFake cmd state of
         Left _err -> do
-          monitor $ counterexample "Preconditon failed"
+          monitor (counterexample "Preconditon failed")
           assert False
         Right (state', resp) -> do
           let name = commandName cmd

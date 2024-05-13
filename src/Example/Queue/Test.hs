@@ -65,7 +65,7 @@ instance StateModel State where
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i
   runReal (Get q)   = Get_  <$> get q
-  runReal (Size q)  = Size_ <$> sizeBroken2 q
+  runReal (Size q)  = Size_ <$> size q
 
   runCommandMonad _ = id
 
