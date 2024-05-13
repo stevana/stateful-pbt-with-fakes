@@ -182,10 +182,10 @@ important omission.
 | proptest | Rust | ☐ | ☐ | See proptest-state-machine. |
 | proptest-state-machine | Rust | ☒ | ☐ | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.". |
 | qcheck-stm | OCaml | ☒ | ☒ | |
-| quickcheck | Prolog | ☐ | <ul><li> - [ ] </li></ul> | |
-| quickcheck | Rust | ☐ | <ul><li> - [ ] </li></ul> | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
+| quickcheck | Prolog | ☐ | ☐ | |
+| quickcheck | Rust | ☐ | ☐ | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134). |
 | quickcheck-state-machine | Haskell | ☒ | ☒ | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
-| rackcheck | Racket | ☐ | <ul><li> - [ ] </li></ul> |  |
+| rackcheck | Racket | ☐ | ☐ |  |
 | rantly | Ruby | ☐ | ☐ | |
 | test.check | Clojure | ☐ | ☐ | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
 | theft | C | ☐ | ☐ | |
