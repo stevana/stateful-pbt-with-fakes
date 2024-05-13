@@ -1573,6 +1573,8 @@ that it's indeed a correct solution to the puzzle[^3].
 
 ### Parallel property-based testing in ~180 LOC
 
+TODO: not done yet...
+
 Let's now turn our focus to parallel property-based testing.
 
 Before showing you the implementation, let me start off by giving a bit of
