@@ -222,7 +222,7 @@ Here are three reasons I've heard from John:
    [helps](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
    adoption:
 
-   > Thomas Arts and I have founded a start-up, Quviq AB, to develop and market
+   > "Thomas Arts and I have founded a start-up, Quviq AB, to develop and market
    > Quviq QuickCheck. Interestingly, this is the second implementation of
    > QuickCheck for Erlang. The first was presented at the Erlang User
    > Conference in 2003, and made available on the web. Despite enthusiasm at
@@ -238,7 +238,7 @@ Here are three reasons I've heard from John:
    > be unreasonable to expect funding agencies to pay for all the work
    > involved. In that light, starting a company is a natural way for a
    > researcher to make an impact on industrial practice—and so far, at least,
-   > it seems to be succeeding.
+   > it seems to be succeeding."
 
 A cynic might argue that there's a conflict of interest between doing research
 and education on one hand and running a company that sells licenses, training
@@ -1952,9 +1952,9 @@ formal proof part, we should cherish such eduction opportunities.
     [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
     gives some of the details:
 
-    > From 2002-2005 he led a major research project in software verification,
+    > "From 2002-2005 he led a major research project in software verification,
     > funded by the Swedish Strategic Research Foundation. This led to the
-    > development of Quviq QuickCheck in Erlang.
+    > development of Quviq QuickCheck in Erlang."
 
     I believe [this](https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/)
     must be the project mentioned above.
