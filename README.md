@@ -763,7 +763,7 @@ Notice that this is indeed the smallest counterexample and how it took 66
 randomly generated test cases to find the sequence of inputs that triggered the
 bug and then 29 shrink steps for QuickCheck to minimise it.
 
-#### Library implementation
+#### Stateful library implementation
 
 In the example above we implemented the `StateModel` interface (or type class),
 next we'll have a look at the definiton of this interface and the testing
@@ -1573,55 +1573,29 @@ that it's indeed a correct solution to the puzzle[^3].
 
 ### Parallel property-based testing in ~180 LOC
 
-TODO: not done yet...
-
 Let's now turn our focus to parallel property-based testing.
 
-Before showing you the implementation, let me start off by giving a bit of
-motivation, a high-level sketch of how it works, and mentioning some prior work
-that I've stolen ideas from.
+Debugging buggy concurrent code is not fun. The main reason for this is that the
+threads interleave in different ways between executions, making it hard to
+reproduce the bug and hard to verify that a bug fix actually worked.
 
-#### Motivation
+Ideally we'd like to make working with concurrent code as pleasant as the
+sequential stateful case and without the user having to write any additional
+test code.
 
-Typically debugging buggy concurrent code is not fun. The main reason for this
-is that the threads interleave in different ways between executions, making it
-hard to reproduce the bug and hard to verify that a bug fix actually worked.
+In order to explain how we can achieve this, we need to first understand how we
+can test concurrent code in a reproducible way.
 
-* Heisenbug
-
-By generating tests, running the same tests many times and shrinking them,
-parallel property-based testing tries to make it slightly less burdensome on the
-programmer.
-
-XXX:
-We've seen how to test if a sequential (single-threaded) program respects some
-specification.
-
-We did so by generating a random sequence of commands and then applied them one
-by one to both the real software under test (SUT), a counter, and the state
-machine specification and then compared the outputs.
-
-Counters are often shared among different threads though, for example to keep
-track of some metric like current number of concurrent connections that our
-service is serving.
-
-So we might want to ask ourselves: how can we test that the counter
-implementation is thread-safe?
-
-Below we will show how the *same* state machine specification that we already
-developed previously can be used to check if a concurrent execution is correct
-using a technique called linearisability checking.
-
-#### How it works
-
-Let's first recall our counter example from last time:
+Recall our `Counter` that we looked at in the sequential testing case. Here
+we'll be using a slight generalisation where the `incr` takes an integer
+parameter which specifies by how much we want to increment (as opposed to always
+incrementing by `1`).
 
 ```haskell
- > c <- newCounter
- > incr c 1
- > incr c 2
- > get c
- 3
+>>> incr 1
+>>> incr 2
+>>> get
+3
 ```
 
 When we interact with the counter sequentially, i.e. one command at the time,
@@ -1643,9 +1617,9 @@ After 29768 iterations we get back `1` rather than the expected `3`! The reason
 for this is because there's a race condition in the implementation of `incr`:
 
 ```haskell
- incr (Counter ref) i = do
-   j <- readIORef ref
-   writeIORef ref (i + j)
+ incr i = do
+   j <- readIORef gLOBAL_COUNTER
+   writeIORef gLOBAL_COUNTER (i + j)
 ```
 
 Because we first read the old value and _then_ write the new incremented value
@@ -1653,15 +1627,15 @@ in an non-atomic way, it's possilbe that if two threads do this at the same time
 they overwrite each others increment. For example:
 
 ```
-   thread 1, incr 1         |  thread 2, incr 2
-   -------------------------+------------------
-    0 <- readIORef ref      |
-                            | 0 <- readIORef ref
-                            | writeIORef ref (2 + 0)
-    writeIORef ref (1 + 0)  |
-                            |
-                            v
-                           time
+   thread 1, incr 1     |  thread 2, incr 2
+   ---------------------+------------------
+    0 <- readIORef      |
+                        | 0 <- readIORef
+                        | writeIORef (2 + 0)
+    writeIORef (1 + 0)  |
+                        |
+                        v
+                       time
 ```
 
 If we read from the counter after the two increments are done we get `1` instead
@@ -1760,26 +1734,7 @@ one that does, then we say that the history linearises and that the concurrent
 execution is correct, if we cannot find a sequential interleaving that respects
 the model then the history doesn't linearise and we have found a problem.
 
-#### Prior work
-
-The following resources where useful when me and my then colleague, Daniel
-Gustafsson, first implemented parallel property-based testing in
-[`quickcheck-state-machine`](https://github.com/stevana/quickcheck-state-machine/tree/master)
-back in 2017.
-
-Apart from the [*Finding Race Conditions in Erlang with QuickCheck and
-PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
-(2009) paper and the [*Linearizability: a correctness condition for concurrent
-objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990) paper
-that they reference, it was useful to have a look at the Erlang's PropEr
-library, which is a (the first?) Quviq QuickCheck clone with support for both
-stateful and parallel testing.
-
-* Not property-based testing per say, but similar in that it generates random
-  commands and checks linearisability is Jepsen's
-  [Knossos](https://aphyr.com/posts/309-knossos-redis-and-linearizability)
-
-#### Implementation
+#### Parallel library implementation
 
 XXX: extend StateModel class:
 
@@ -1901,6 +1856,25 @@ also inspried by:
   [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
 
 XXX: I'll refer back to these when I motivate my design decisions below.
+
+#### Parallel
+
+The following resources where useful when me and my then colleague, Daniel
+Gustafsson, first implemented parallel property-based testing in
+[`quickcheck-state-machine`](https://github.com/stevana/quickcheck-state-machine/tree/master)
+back in 2017.
+
+Apart from the [*Finding Race Conditions in Erlang with QuickCheck and
+PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+(2009) paper and the [*Linearizability: a correctness condition for concurrent
+objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990) paper
+that they reference, it was useful to have a look at the Erlang's PropEr
+library, which is a (the first?) Quviq QuickCheck clone with support for both
+stateful and parallel testing.
+
+* Not property-based testing per say, but similar in that it generates random
+  commands and checks linearisability is Jepsen's
+  [Knossos](https://aphyr.com/posts/309-knossos-redis-and-linearizability)
 
 
 ## Conclusion and future work
