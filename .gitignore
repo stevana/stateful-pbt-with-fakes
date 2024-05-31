@@ -1,3 +1,11 @@
+# Cabal
 dist-newstyle/
 cabal.project.local*
 dist
+
+# Profiling
+*.aux
+*.hp
+*.prof
+*.ps
+*.svg
