@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -38,7 +39,7 @@ instance StateModel State where
     = New
     | TakeTicket ref
     | Reset ref
-    deriving (Eq, Show, Functor)
+    deriving (Eq, Show, Functor, Foldable, Traversable)
 
   data Response State ref
     = New_ ref

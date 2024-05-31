@@ -169,7 +169,7 @@ linearisable env = any' (go initialState)
     go s (Node (Op cmd cresp) ts) =
       case runFake cmd s of
         Left err ->
-          error $ "linearisable: impossible, all precondtions are satisifed during generation\ncmd = " ++
+          error $ "linearisable: impossible, all preconditions are satisifed during generation\ncmd = " ++
                   show cmd ++ "\ns = " ++ show s ++ "\nerr = " ++ show err
         Right (s', resp) ->
           cresp == fmap (lookupEnv env) resp && any' (go s') ts

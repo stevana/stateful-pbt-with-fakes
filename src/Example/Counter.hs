@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -58,7 +59,7 @@ instance StateModel Counter where
   data Command Counter r
     = Incr
     | Get
-    deriving (Show, Functor)
+    deriving (Show, Functor, Foldable, Traversable)
 
   -- The responses correspond to the return types of each function. By
   -- convention we'll add a underscore suffix to a response of the corresponding

@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -34,7 +35,7 @@ instance StateModel FakeFS where
     | Write h String
     | Close h
     | Read  File
-    deriving (Eq, Show, Functor)
+    deriving (Eq, Show, Functor, Foldable, Traversable)
 
   data Response FakeFS h
     = MkDir_ ()

@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -12,8 +13,8 @@ import qualified Data.Map as Map
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
-import Example.Queue.Real
 import Example.Queue.Fake
+import Example.Queue.Real
 import Stateful
 
 ------------------------------------------------------------------------
@@ -31,7 +32,7 @@ instance StateModel State where
     | Put q Int
     | Get q
     | Size q
-    deriving (Show, Functor)
+    deriving (Show, Functor, Foldable, Traversable)
 
   data Response State q
     = New_ q
@@ -65,7 +66,7 @@ instance StateModel State where
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i
   runReal (Get q)   = Get_  <$> get q
-  runReal (Size q)  = Size_ <$> sizeBroken q
+  runReal (Size q)  = Size_ <$> size q
 
   runCommandMonad _ = id
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -33,7 +34,7 @@ instance StateModel Model where
     | EmptySmall
     | SmallIntoBig
     | BigIntoSmall
-    deriving (Show, Enum, Bounded, Functor)
+    deriving (Show, Enum, Bounded, Functor, Foldable, Traversable)
 
   data Response Model r = Done | BigJugIs4
     deriving (Eq, Show, Functor, Foldable)

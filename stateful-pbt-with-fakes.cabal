@@ -21,6 +21,7 @@ common warnings
 library
   import:           warnings
   exposed-modules:
+    AtomicCounter
     Example.Counter
     Example.DieHard
     Example.FileSystem.Fake
@@ -32,11 +33,13 @@ library
     Example.Queue.Real
     Example.Queue.Test
     Example.Registry.Real
-    Example.Registry.RealBuggy
     Example.Registry.Test
     Example.TicketDispenser
     Parallel
+    Parallel2
+    SleepyIORef
     Stateful
+    Stateful2
 
   build-depends:
     , array
@@ -46,7 +49,9 @@ library
     , directory
     , exceptions
     , filepath
-    , QuickCheck
+    , mtl
+    , pretty
+    , QuickCheck  ==2.15
     , stm
 
   hs-source-dirs:   src
@@ -66,3 +71,7 @@ test-suite test
     , stateful-pbt-with-fakes
     , tasty
     , tasty-quickcheck
+
+  ghc-options:      -O2 -threaded -with-rtsopts=-N
+
+-- -O0 -threaded -prof -fprof-auto "-with-rtsopts=-N -p -s -hT"

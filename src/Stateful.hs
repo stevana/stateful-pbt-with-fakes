@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -24,6 +25,7 @@ class ( Monad (CommandMonad state)
       , MonadIO (CommandMonad state)
       , MonadCatch (CommandMonad state)
       , Functor (Command state)
+      , Traversable (Command state)
       , Functor (Response state)
       , Foldable (Response state)
       , Eq (Response state (Reference state))
@@ -112,6 +114,7 @@ instance Foldable NonFoldable where
 
 newtype Commands state = Commands
   { unCommands :: [Command state (Var (Reference state))] }
+  deriving newtype (Semigroup, Monoid)
 deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
 
 -- The precondition for a command is the same as the fake returning a value.

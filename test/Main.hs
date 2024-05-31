@@ -22,7 +22,11 @@ tests = testGroup "Tests"
   , testProperty "Queue" prop_queue
   , testProperty "DieHard" (expectFailure prop_dieHard)
   , testProperty "Registry" prop_registry
-  , testProperty "ParallelRegistry" prop_parallelRegistry
+  , testProperty "ParallelRegistry" (noShrinking $ prop_parallelRegistry)
+  , testProperty "Unregister" (prop_unregister)
+  , testProperty "Race" (prop_race)
+  , testProperty "ShouldNotHaveBeenGenerated" prop_shouldNotHaveBeenGenerated
+  , testProperty "ParallelGeneration" prop_parallelGeneration
   , testProperty "TicketDispenser" prop_ticketDispenser
   , testProperty "ParallelTicketDispenser" (expectFailure prop_parallelTicketDispenser)
   , testProperty "FileSystem" prop_fileSystem
