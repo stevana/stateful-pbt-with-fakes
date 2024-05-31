@@ -122,8 +122,8 @@ Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (ICFP 2009) that parallel testing is described in detail including a reference
 to [*Linearizability: a correctness condition for concurrent
-objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990) which is
-the main technique behind it.
+objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) by Herlihy and
+Wing (1990) which is the main technique behind it.
 
 I'd like to stress that no Quviq QuickCheck library code is ever shared in any
 of these papers, they only contain the library APIs (which are public) and test
@@ -154,7 +154,7 @@ how well supported these two testing features are. Let me be clear up front that
 I've not used all of these libraries. My understanding comes from reading the
 documentation, issue tracker and sometimes source code.
 
-To my best knowledge, as of April 2024, the following table summarises the
+To my best knowledge, as of June 2024, the following table summarises the
 situation. Please open an
 [issue](https://github.com/stevana/stateful-pbt-with-fakes/issues), PR, or get
 in [touch](https://stevana.github.io/about.html) if you see a mistake or an
@@ -457,12 +457,12 @@ There are however a few patterns that come up over and over again. With
 `reverse` we saw an example of an involutory function, i.e. `f (f x) == x`, here
 are a few other examples:
 
-- Inverses, e.g. `\(i : Input) -> deserialise (serialise i) == i`;
-- Idempotency, e.g. `\(xs : [Int]) -> sort (sort xs) == sort xs`;
-- Associativity, e.g. `\(i j k : Int) -> (i + j) + k == i + (j + k)`;
-- Axioms of abstract data types, e.g. `\(x : Int)(xs : [Int]) -> member x
+- Inverses, e.g. `\(i :: Input) -> deserialise (serialise i) == i`;
+- Idempotency, e.g. `\(xs :: [Int]) -> sort (sort xs) == sort xs`;
+- Associativity, e.g. `\(i j k :: Int) -> (i + j) + k == i + (j + k)`;
+- Axioms of abstract data types, e.g. `\(x :: Int)(xs :: [Int]) -> member x
   (insert x xs) && not (member x (remove x xs))`;
-- Metamorphic properties, e.g. `\(g : Graph)(m n : Node) -> shortestPath g m n ==
+- Metamorphic properties, e.g. `\(g :: Graph)(m n :: Node) -> shortestPath g m n ==
   shortestPath g n m`.
 
 Readers familiar with discrete math might recognise some of the above.
@@ -524,8 +524,8 @@ to `R' : [i] -> [o] -> Bool` to account for how the state changes over time.
 Writing such properties is cumbersome, an alternative is to account for the
 state explicitly by means of some kind of model.
 
-This model could be a state machine of type `s -> i -> (s, o)`, i.e. a function
-from the old state and an input to the next state and the output. From this we
+This model could be a state machine of type `m -> i -> (m, o)`, i.e. a function
+from the old model and an input to the next model and the output. From this we
 can derive a property that for each input checks if the outputs of the stateful
 component agrees with the output of the state machine:
 
@@ -1736,14 +1736,14 @@ the model then the history doesn't linearise and we have found a problem.
 
 #### Parallel library implementation
 
-XXX: extend StateModel class:
+Let's try to implement the above. We'll split up the implementation in three
+parts. First we'll show how to generate and shrink parallel commands, these will
+be different than the sequential commands as we have more than one thread that
+does the execution. Second we'll implement linearisability checking by trying to
+find an interleaving of the concurrent history which respects the sequential
+model. Finally, we'll have a look at how to execute the generated parallel
+commands to produce a concurrent history.
 
-```haskell
-  -- If another command monad is used we need to provide a way run it inside the
-  -- IO monad. This is only needed for parallel testing, because IO is the only
-  -- monad we can execute on different threads.
-  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
-```
 ##### Parallel program generation and shrinking
 
 
@@ -1753,10 +1753,31 @@ XXX: extend StateModel class:
 
 ##### Parallel running
 
-#### Example: parallel counter
+XXX: extend StateModel class:
 
 ```haskell
+  -- If another command monad is used we need to provide a way run it inside the
+  -- IO monad. This is only needed for parallel testing, because IO is the only
+  -- monad we can execute on different threads.
+  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 ```
+
+#### Example: parallel counter
+
+This is the only new code we need to add to enable parallel testing of our
+`Counter` example from before:
+
+```haskell
+prop_parallelCounter :: ParallelCommands Counter -> Property
+prop_parallelCounter cmds = monadicIO $ do
+  replicateM_ 10 $ do
+    runParallelCommands cmds
+    run reset
+  assert True
+```
+
+If you forgot how the interface implementation for the `Counter` example looked,
+no need to scoll up we'll give a very similar example next.
 
 #### Example: ticket dispenser
 
@@ -1777,11 +1798,6 @@ The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (2009)
-
-Parallel property still fails sometimes... E.g. `--quickcheck-replay=300529`
-
-```haskell
-```
 
 ### Integration testing with contract tested fakes
 
@@ -1913,6 +1929,10 @@ stateful and parallel testing.
     + Jepsen's knossos checker
   - Simulation testing
     + Always and sometimes combinators?
+
+* partial order reduction: in concurrent execution, sometimes we can commute two
+  operations without changing the outcome. We can explit this to check less
+  histories.
 
 Formal specification and proofs are fundamental to computer science and have
 occupied minds since [Alan
