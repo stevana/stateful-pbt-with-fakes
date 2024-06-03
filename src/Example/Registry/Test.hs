@@ -21,16 +21,17 @@ import Stateful
 
 ------------------------------------------------------------------------
 
-data RegState = RegState {
-    tids :: [Var (ThreadId)],
-    regs :: [(String, Var (ThreadId))]
+data RegState = RegState
+  { tids   :: [Var ThreadId]
+  , regs   :: [(String, Var (ThreadId))]
+  , killed :: [Var ThreadId]
   }
   deriving (Eq, Show)
 
 instance StateModel RegState where
 
   initialState :: RegState
-  initialState = RegState [] []
+  initialState = RegState [] [] []
 
   type Reference RegState = ThreadId
 
@@ -39,6 +40,7 @@ instance StateModel RegState where
     | WhereIs String
     | Register String tid
     | Unregister String
+    | Kill tid
     deriving (Show, Functor, Foldable)
 
   data Response RegState tid
@@ -46,6 +48,7 @@ instance StateModel RegState where
     | WhereIs_ (NonFoldable (Maybe tid))
     | Register_ (Either ErrorCall ())
     | Unregister_ (Either ErrorCall ())
+    | Kill_ ()
     deriving (Eq, Show, Functor, Foldable)
 
   generateCommand :: RegState -> Gen (Command RegState (Var ThreadId))
@@ -54,12 +57,11 @@ instance StateModel RegState where
     [ Register <$> arbitraryName <*> elements (tids s) | not (null (tids s)) ] ++
     [ Unregister <$> arbitraryName
     , WhereIs <$> arbitraryName
-    ]
-
-  type PreconditionFailure RegState = ()
+    ] ++
+    [ Kill <$> elements (tids s) | not (null (tids s)) ]
 
   runFake :: Command RegState (Var ThreadId)-> RegState
-          -> Either () (RegState, Response RegState (Var ThreadId))
+          -> Either void (RegState, Response RegState (Var ThreadId))
   runFake Spawn               s = let tid = Var (length (tids s)) in
                                   return (s { tids = tids s ++ [tid] }, Spawn_ tid)
   runFake (WhereIs name)      s = return (s, WhereIs_ (NonFoldable (lookup name (regs s))))
@@ -67,26 +69,29 @@ instance StateModel RegState where
     | tid `elem` tids s
     , name `notElem` map fst (regs s)
     , tid `notElem` map snd (regs s)
+    , tid `notElem` killed s
     = return (s { regs = (name, tid) : regs s }, Register_ (Right ()))
 
-    | tid `elem` tids s
-    -- , name `elem` map fst (regs s)
-    -- , tid `elem` map snd (regs s)
+    | otherwise
     = return (s, Register_ (Left (ErrorCall "bad argument")))
 
-    | otherwise = Left ()
   runFake (Unregister name)   s
     | name `elem` map fst (regs s) =
         return (s { regs = remove name (regs s) }, Unregister_ (Right ()))
     | otherwise = return (s, Unregister_ (Left (ErrorCall "bad argument")))
     where
       remove x = filter ((/= x) . fst)
+  runFake (Kill tid) s = return (s { killed = tid : killed s
+                                   , regs   = remove tid (regs s)}, Kill_ ())
+    where
+      remove x = filter ((/= x) . snd)
 
   runReal :: Command RegState ThreadId -> IO (Response RegState ThreadId)
-  runReal Spawn               = Spawn_    <$> forkIO (threadDelay 100000000)
+  runReal Spawn               = Spawn_      <$> spawn
   runReal (WhereIs name)      = WhereIs_ . NonFoldable <$> whereis name
   runReal (Register name tid) = Register_   <$> fmap (left abstractError) (try (register name tid))
   runReal (Unregister name)   = Unregister_ <$> fmap (left abstractError) (try (unregister name))
+  runReal (Kill tid)          = Kill_       <$> kill tid
 
   monitoring :: (RegState, RegState) -> Command RegState ThreadId -> Response RegState ThreadId
              -> Property -> Property
@@ -94,13 +99,13 @@ instance StateModel RegState where
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"
 
-instance ParallelModel RegState where
-  runCommandMonad _ = id
-
 -- Throws away the location information from the error, so that it matches up
 -- with the fake.
 abstractError :: ErrorCall -> ErrorCall
 abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
+
+instance ParallelModel RegState where
+  runCommandMonad _ = id
 
 data Tag = RegisterFailed
   deriving Show
@@ -122,12 +127,6 @@ cleanUp = sequence
   [ try (unregister name) :: IO (Either ErrorCall ())
   | name <- allNames
   ]
-
--- XXX: Not used.
-kill :: ThreadId -> IO ()
-kill tid = do
-  killThread tid
-  yield
 
 prop_parallelRegistry :: ParallelCommands RegState -> Property
 prop_parallelRegistry cmds = monadicIO $ do

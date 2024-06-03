@@ -26,6 +26,9 @@ registry = unsafePerformIO (newIORef [])
 lock :: MVar ()
 lock = unsafePerformIO (newMVar ())
 
+spawn :: IO ThreadId
+spawn = forkIO (threadDelay 100000000)
+
 whereis :: String -> IO (Maybe ThreadId)
 whereis name = do
   reg <- readRegistry
@@ -68,3 +71,18 @@ readRegistry = do
 
 badarg :: a
 badarg = error "bad argument"
+
+kill :: ThreadId -> IO ()
+kill tid = do
+  killThread tid
+  waitUntilDead 1000
+  where
+    waitUntilDead :: Int -> IO ()
+    waitUntilDead 0 = error "kill: thread didn't die"
+    waitUntilDead n = do
+      s <- threadStatus tid
+      if s == ThreadFinished || s == ThreadDied
+      then return ()
+      else do
+        threadDelay 1000
+        waitUntilDead (n - 1)
