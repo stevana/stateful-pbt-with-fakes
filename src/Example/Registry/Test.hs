@@ -25,7 +25,7 @@ data RegState = RegState {
     tids :: [Var (ThreadId)],
     regs :: [(String, Var (ThreadId))]
   }
-  deriving Show
+  deriving (Eq, Show)
 
 instance StateModel RegState where
 
@@ -39,13 +39,13 @@ instance StateModel RegState where
     | WhereIs String
     | Register String tid
     | Unregister String
-    deriving (Show, Functor)
+    deriving (Show, Functor, Foldable)
 
   data Response RegState tid
     = Spawn_ tid
     | WhereIs_ (NonFoldable (Maybe tid))
     | Register_ (Either ErrorCall ())
-    | Unregister_ ()
+    | Unregister_ (Either ErrorCall ())
     deriving (Eq, Show, Functor, Foldable)
 
   generateCommand :: RegState -> Gen (Command RegState (Var ThreadId))
@@ -70,28 +70,23 @@ instance StateModel RegState where
     = return (s { regs = (name, tid) : regs s }, Register_ (Right ()))
 
     | tid `elem` tids s
-    , name `elem` map fst (regs s)
-    , tid `elem` map snd (regs s)
+    -- , name `elem` map fst (regs s)
+    -- , tid `elem` map snd (regs s)
     = return (s, Register_ (Left (ErrorCall "bad argument")))
 
     | otherwise = Left ()
   runFake (Unregister name)   s
     | name `elem` map fst (regs s) =
-        return (s { regs = remove name (regs s) }, Unregister_ ())
-    | otherwise =
-        Left ()
+        return (s { regs = remove name (regs s) }, Unregister_ (Right ()))
+    | otherwise = return (s, Unregister_ (Left (ErrorCall "bad argument")))
     where
       remove x = filter ((/= x) . fst)
 
   runReal :: Command RegState ThreadId -> IO (Response RegState ThreadId)
   runReal Spawn               = Spawn_    <$> forkIO (threadDelay 100000000)
   runReal (WhereIs name)      = WhereIs_ . NonFoldable <$> whereis name
-  runReal (Register name tid) = Register_ <$> fmap (left abstractError) (try (register name tid))
-    where
-      -- Throws away the location information from the error, so that it matches
-      -- up with the fake.
-      abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
-  runReal (Unregister name)   = Unregister_ <$> unregister name
+  runReal (Register name tid) = Register_   <$> fmap (left abstractError) (try (register name tid))
+  runReal (Unregister name)   = Unregister_ <$> fmap (left abstractError) (try (unregister name))
 
   monitoring :: (RegState, RegState) -> Command RegState ThreadId -> Response RegState ThreadId
              -> Property -> Property
@@ -99,7 +94,13 @@ instance StateModel RegState where
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"
 
+instance ParallelModel RegState where
   runCommandMonad _ = id
+
+-- Throws away the location information from the error, so that it matches up
+-- with the fake.
+abstractError :: ErrorCall -> ErrorCall
+abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
 
 data Tag = RegisterFailed
   deriving Show
@@ -130,6 +131,7 @@ kill tid = do
 
 prop_parallelRegistry :: ParallelCommands RegState -> Property
 prop_parallelRegistry cmds = monadicIO $ do
+  void (run cleanUp)
   replicateM_ 10 $ do
     runParallelCommands cmds
     void (run cleanUp)

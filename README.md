@@ -1941,6 +1941,10 @@ Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-am
 formal specification to a lot of programmers without the tedious and laborious
 formal proof part, we should cherish such eduction opportunities.
 
+## Acknowledgments
+
+* Daniel for discussing fix for parallel generation issue
+
 [^1]: Is there a source for this story? I can't remember where I've heard it.
     This short
     [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)

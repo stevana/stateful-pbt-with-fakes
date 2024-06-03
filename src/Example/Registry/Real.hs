@@ -7,11 +7,11 @@
 
 module Example.Registry.Real where
 
-import Data.IORef
-import Control.Monad
 import Control.Concurrent
+import Control.Monad
+import Data.IORef
+import GHC.Conc (ThreadStatus(ThreadDied, ThreadFinished), threadStatus)
 import System.IO.Unsafe
-import GHC.Conc
 
 alive :: ThreadId -> IO Bool
 alive tid = do
@@ -22,35 +22,47 @@ alive tid = do
 registry :: IORef [(String,ThreadId)]
 registry = unsafePerformIO (newIORef [])
 
+{-# NOINLINE lock #-}
+lock :: MVar ()
+lock = unsafePerformIO (newMVar ())
+
 whereis :: String -> IO (Maybe ThreadId)
 whereis name = do
   reg <- readRegistry
   return $ lookup name reg
 
 register :: String -> ThreadId -> IO ()
-register name tid = do
-  ok <- alive tid
-  reg <- readRegistry
-  if ok && name `notElem` map fst reg && tid `notElem` map snd reg
-    then atomicModifyIORef registry $ \reg' ->
-           if name `notElem` map fst reg' && tid `notElem` map snd reg'
-             then ((name,tid):reg',())
-             else (reg',badarg)
-    else badarg
+register name tid =
+  withMVar lock $ \_ -> do
+    ok <- alive tid
+    threadDelay 1000
+    reg <- readRegistry
+    threadDelay 1000
+    if ok && name `notElem` map fst reg && tid `notElem` map snd reg
+      then do
+        threadDelay 1000
+        atomicModifyIORef registry $ \reg' ->
+             if name `notElem` map fst reg' && tid `notElem` map snd reg'
+               then ((name,tid):reg',())
+               else (reg',badarg)
+      else badarg
 
 unregister :: String -> IO ()
-unregister name = do
-  reg <- readRegistry
-  if name `elem` map fst reg
-    then atomicModifyIORef registry $ \reg' ->
-           (filter ((/=name).fst) reg',
-            ())
-    else badarg
+unregister name =
+  withMVar lock $ \_ -> do
+    reg <- readRegistry
+    threadDelay 1000
+    if name `elem` map fst reg
+      then atomicModifyIORef registry $ \reg' ->
+             (filter ((/=name).fst) reg',
+              ())
+      else badarg
 
 readRegistry :: IO [(String, ThreadId)]
 readRegistry = do
   reg <- readIORef registry
   garbage <- filterM (fmap not.alive) (map snd reg)
+  threadDelay 1000
   atomicModifyIORef' registry $ \reg' ->
     let reg'' = filter ((`notElem` garbage).snd) reg' in (reg'',reg'')
 

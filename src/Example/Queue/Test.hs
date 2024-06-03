@@ -31,7 +31,7 @@ instance StateModel State where
     | Put q Int
     | Get q
     | Size q
-    deriving (Show, Functor)
+    deriving (Show, Functor, Foldable)
 
   data Response State q
     = New_ q
@@ -65,9 +65,7 @@ instance StateModel State where
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i
   runReal (Get q)   = Get_  <$> get q
-  runReal (Size q)  = Size_ <$> sizeBroken q
-
-  runCommandMonad _ = id
+  runReal (Size q)  = Size_ <$> size q
 
 prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do

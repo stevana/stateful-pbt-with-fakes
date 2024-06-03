@@ -6,7 +6,7 @@
 
 module Example.Counter where
 
-import Control.Concurrent
+import Control.Concurrent (threadDelay)
 import Control.Monad
 import Data.IORef
 import Data.Void
@@ -33,7 +33,7 @@ incr42Bug = atomicModifyIORef' gLOBAL_COUNTER
 incrRaceCondition :: IO ()
 incrRaceCondition = do
   n <- readIORef gLOBAL_COUNTER
-  threadDelay 2000
+  threadDelay 100
   writeIORef gLOBAL_COUNTER (n + 1)
 
 get :: IO Int
@@ -58,7 +58,7 @@ instance StateModel Counter where
   data Command Counter r
     = Incr
     | Get
-    deriving (Show, Functor)
+    deriving (Show, Functor, Foldable)
 
   -- The responses correspond to the return types of each function. By
   -- convention we'll add a underscore suffix to a response of the corresponding
@@ -89,8 +89,10 @@ instance StateModel Counter where
   -- This example has no references.
   type Reference Counter = Void
 
+instance ParallelModel Counter where
+
   -- The command monad is IO, so we don't need to do anything here.
-  runCommandMonad _s = id
+  runCommandMonad _ = id
 
 prop_counter :: Commands Counter -> Property
 prop_counter cmds = monadicIO $ do

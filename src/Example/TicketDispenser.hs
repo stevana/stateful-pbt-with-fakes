@@ -16,17 +16,12 @@ import Test.QuickCheck.Monadic
 
 import Stateful
 import Parallel
+import Opaque
 
 ------------------------------------------------------------------------
 
-newtype Opaque a = Opaque { unOpaque :: a }
-  deriving Eq
-
-instance Show (Opaque a) where
-  show _ = "<opaque>"
-
 data State = NoState | State Int
-  deriving Show
+  deriving (Eq, Show)
 
 instance StateModel State where
 
@@ -38,15 +33,13 @@ instance StateModel State where
     = New
     | TakeTicket ref
     | Reset ref
-    deriving (Eq, Show, Functor)
+    deriving (Eq, Show, Functor, Foldable)
 
   data Response State ref
     = New_ ref
     | TakeTicket_ Int
     | Reset_ ()
     deriving (Eq, Show, Functor, Foldable)
-
-  type PreconditionFailure State = ()
 
   generateCommand :: State -> Gen (Command State (Var (Reference State)))
   generateCommand NoState   = return New
@@ -55,16 +48,16 @@ instance StateModel State where
     , (9, return (TakeTicket (Var 0)))
     ]
 
-  runCommandMonad _ = id
+  type PreconditionFailure State = ()
 
   runFake :: Command State (Var (Reference State)) -> State
           -> Either () (State, Response State (Var (Reference State)))
-  runFake New               NoState    = return (State 0, New_ (Var 0))
-  runFake New               (State _)  = Left ()
-  runFake (TakeTicket _ref) (State n)  = return (State (n + 1), TakeTicket_ n)
-  runFake (TakeTicket _ref) NoState    = Left ()
-  runFake (Reset _ref)      (State _n) = return (State 0, Reset_ ())
-  runFake (Reset _ref)      NoState    = Left ()
+  runFake New           NoState    = return (State 0, New_ (Var 0))
+  runFake New           State {}   = Left ()
+  runFake TakeTicket {} (State n)  = return (State (n + 1), TakeTicket_ n)
+  runFake TakeTicket {} NoState    = Left ()
+  runFake Reset {}      State {}   = return (State 0, Reset_ ())
+  runFake Reset {}      NoState    = Left ()
 
   runReal :: Command State (Reference State) -> IO (Response State (Reference State))
   runReal New = New_ . Opaque <$> newIORef 0
@@ -76,6 +69,9 @@ instance StateModel State where
     return (TakeTicket_ n)
   runReal (Reset ref) = Reset_ <$> writeIORef (unOpaque ref) 0
 
+instance ParallelModel State where
+
+  runCommandMonad _ = id
 
 prop_ticketDispenser :: Commands State -> Property
 prop_ticketDispenser cmds = monadicIO $ do

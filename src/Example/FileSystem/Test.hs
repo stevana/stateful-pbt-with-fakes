@@ -34,7 +34,7 @@ instance StateModel FakeFS where
     | Write h String
     | Close h
     | Read  File
-    deriving (Eq, Show, Functor)
+    deriving (Eq, Show, Functor, Foldable)
 
   data Response FakeFS h
     = MkDir_ ()
@@ -109,8 +109,6 @@ instance StateModel FakeFS where
   monitoring (_s, _s') Read {} (Read_ s) = classify (not (null s)) (show SuccessfulRead)
   monitoring (_s, s') _cmd _resp =
     classify (length (Map.keys (open s')) >= 2) (show OpenTwo)
-
-  runCommandMonad _ = id
 
 ------------------------------------------------------------------------
 

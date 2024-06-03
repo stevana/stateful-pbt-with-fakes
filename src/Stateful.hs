@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -12,8 +13,12 @@ module Stateful where
 import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.IO.Class
+import Data.IntMap (IntMap)
+import qualified Data.IntMap as IntMap
 import Data.Foldable
 import Data.Kind
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Void
 import Test.QuickCheck hiding (Failure, Success)
 import Test.QuickCheck.Monadic
@@ -24,6 +29,7 @@ class ( Monad (CommandMonad state)
       , MonadIO (CommandMonad state)
       , MonadCatch (CommandMonad state)
       , Functor (Command state)
+      , Foldable (Command state)
       , Functor (Response state)
       , Foldable (Response state)
       , Eq (Response state (Reference state))
@@ -87,11 +93,6 @@ class ( Monad (CommandMonad state)
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
 
-  -- If another command monad is used we need to provide a way run it inside the
-  -- IO monad. This is only needed for parallel testing, because IO is the only
-  -- monad we can execute on different threads.
-  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
-
 ------------------------------------------------------------------------
 
 data Var a = Var Int
@@ -148,11 +149,36 @@ instance StateModel state => Arbitrary (Commands state) where
             ]
 
   shrink :: Commands state -> [Commands state]
-  shrink (Commands cmds) =
-    map (Commands . prune . map fst)
-        (shrinkList shrinker (snd (withStates initialState cmds)))
+  shrink (Commands cmds0)
+    = filter (not . null . unCommands)
+    $ map (Commands . prunedCommands . prune initialState Set.empty . map fst)
+          (shrinkList shrinker (snd (withStates initialState cmds0)))
     where
       shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+
+      prune :: StateModel state
+            => state -> Set (Var (Reference state))
+            -> [Command state (Var (Reference state))]
+            -> Pruned state
+      prune s0 vars0 = go s0 vars0 []
+        where
+          go s vars acc [] = Pruned s vars (reverse acc)
+          go s vars acc (cmd : cmds)
+            | not (scopeCheck vars cmd) = go s vars acc cmds
+            | otherwise = case runFake cmd s of
+                Left _preconditionFailure -> go s vars acc cmds
+                Right (s', resp) ->
+                  let
+                    returnedVars = Set.fromList (toList resp)
+                    vars' = returnedVars `Set.union` vars
+                  in
+                    go s' vars' (cmd : acc) cmds
+
+data Pruned state = Pruned
+  { prunedState    :: state
+  , prunedScope    :: Set (Var (Reference state))
+  , prunedCommands :: [Command state (Var (Reference state))]
+  }
 
 withStates :: StateModel state
            => state -> [Command state (Var (Reference state))]
@@ -162,14 +188,11 @@ withStates s0 = go s0 []
     go s acc []           = (s, reverse acc)
     go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
 
-prune :: StateModel state
-      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
-prune = go initialState
+scopeCheck :: StateModel state
+           => Set (Var a) -> Command state (Var a) -> Bool
+scopeCheck varsInScope cmd = usedVars `Set.isSubsetOf` varsInScope
   where
-    go _s [] = []
-    go  s (cmd : cmds)
-      | precondition s cmd = cmd : go (nextState s cmd) cmds
-      | otherwise          = go s cmds
+    usedVars = Set.fromList (toList cmd)
 
 ------------------------------------------------------------------------
 
@@ -189,9 +212,9 @@ prune = go initialState
 -- ask the user to manually implement it.
 runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
-runCommands (Commands cmds0) = go initialState [] cmds0
+runCommands (Commands cmds0) = go initialState emptyEnv cmds0
   where
-    go :: state -> [(Int, Reference state)] -> [Command state (Var (Reference state))]
+    go :: state -> Env state -> [Command state (Var (Reference state))]
        -> PropertyM (CommandMonad state) ()
     go _state _env [] = return ()
     go  state  env (cmd : cmds) = do
@@ -207,7 +230,7 @@ runCommands (Commands cmds0) = go initialState [] cmds0
           monitor (counterexample (show cmd ++ " --> " ++ show cresp))
           monitor (monitoring (state, state') ccmd cresp)
           let refs   = toList cresp
-              env'   = env ++ zip [length env..] refs
+              env'   = extendEnv env (zip [sizeEnv env..] refs)
               cresp' = fmap (lookupEnv env') resp
               ok     = cresp == cresp'
           unless ok $
@@ -215,8 +238,19 @@ runCommands (Commands cmds0) = go initialState [] cmds0
           assert ok
           go state' env' cmds
 
-lookupEnv :: [(Int, a)] -> Var a -> a
-lookupEnv env (Var x) =
-  case lookup x env of
-    Nothing  -> discard -- ^ This can happen if a shrink step makes a variable unbound.
-    Just ref -> ref
+newtype Env state = Env { unEnv :: IntMap (Reference state) }
+
+sizeEnv :: Env state -> Int
+sizeEnv (Env im) = IntMap.size im
+
+emptyEnv :: Env state
+emptyEnv = Env IntMap.empty
+
+lookupEnv :: Env state -> Var (Reference state) -> Reference state
+lookupEnv (Env im) (Var i) = im IntMap.! i
+
+extendEnv :: Env state -> [(Int, Reference state)] -> Env state
+extendEnv (Env im) refs = Env (im `IntMap.union` IntMap.fromList refs)
+
+combineEnvs :: [Env state] -> Env state
+combineEnvs = Env . IntMap.unions . map unEnv

@@ -27,14 +27,16 @@ library
     Example.FileSystem.Interface
     Example.FileSystem.Real
     Example.FileSystem.Test
+    Example.KeyValueStore.Real
+    Example.KeyValueStore.Test
     Example.Queue.Fake
     Example.Queue.Interface
     Example.Queue.Real
     Example.Queue.Test
     Example.Registry.Real
-    Example.Registry.RealBuggy
     Example.Registry.Test
     Example.TicketDispenser
+    Opaque
     Parallel
     Stateful
 
@@ -66,3 +68,5 @@ test-suite test
     , stateful-pbt-with-fakes
     , tasty
     , tasty-quickcheck
+
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N -fno-ignore-asserts

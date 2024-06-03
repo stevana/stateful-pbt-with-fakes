@@ -17,13 +17,19 @@ main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests"
-  [ testProperty "Counter" prop_counter
-  , testProperty "ParallelCounter" (expectFailure prop_parallelCounter)
+  [ sequentialTestGroup "Counter" AllSucceed
+      [ testProperty "Sequential" prop_counter
+      , testProperty "Parallel" (expectFailure prop_parallelCounter)
+      ]
   , testProperty "Queue" prop_queue
   , testProperty "DieHard" (expectFailure prop_dieHard)
-  , testProperty "Registry" prop_registry
-  , testProperty "ParallelRegistry" prop_parallelRegistry
-  , testProperty "TicketDispenser" prop_ticketDispenser
-  , testProperty "ParallelTicketDispenser" (expectFailure prop_parallelTicketDispenser)
+  , sequentialTestGroup "Registry" AllSucceed
+      [ testProperty "Sequential" prop_registry
+      , testProperty "Parallel" prop_parallelRegistry
+      ]
+  , testGroup "TicketDispenser"
+      [ testProperty "Sequential" prop_ticketDispenser
+      , testProperty "Parallel" (expectFailure prop_parallelTicketDispenser)
+      ]
   , testProperty "FileSystem" prop_fileSystem
   ]
