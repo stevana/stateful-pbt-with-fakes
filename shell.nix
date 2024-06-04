@@ -8,6 +8,8 @@ pkgs.mkShell {
   packages = with pkgs; [
     haskell.compiler.ghc963
     haskellPackages.cabal-fmt
+    haskellPackages.pandoc-include-code
+    pandoc
     stylish-haskell
     zlib.dev
     proselint

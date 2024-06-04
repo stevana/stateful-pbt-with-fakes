@@ -467,7 +467,7 @@ are a few other examples:
 
 Readers familiar with discrete math might recognise some of the above.
 
-### Stateful property-based testing in ~150 LOC
+### Stateful property-based testing in ~180 LOC
 
 In the pure property-based testing case, that we just looked at, the picture
 of the test setup looks a bit like this:
@@ -1571,7 +1571,7 @@ When we run `quickcheck prop_dieHard` we get the following output:
 Notice how the trace shows the intermediate states, making it easy to verify
 that it's indeed a correct solution to the puzzle[^3].
 
-### Parallel property-based testing in ~180 LOC
+### Parallel property-based testing in ~230 LOC
 
 Let's now turn our focus to parallel property-based testing.
 
@@ -1746,6 +1746,8 @@ commands to produce a concurrent history.
 
 ##### Parallel program generation and shrinking
 
+```haskell {include=src/Parallel.hs snippet=parallel-commands}
+```
 
 * shrinking can be improved, see qsm
 
@@ -1779,14 +1781,10 @@ prop_parallelCounter cmds = monadicIO $ do
 If you forgot how the interface implementation for the `Counter` example looked,
 no need to scoll up we'll give a very similar example next.
 
-#### Example: ticket dispenser
-
+This example is very similar to the ticket dispenser example that appears in
 [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014)
-
-```haskell
-```
 
 #### Example: process registry
 
@@ -1798,6 +1796,13 @@ The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (2009)
+
+```haskell
+```
+
+#### Example: key-value store
+
+* disjoint state + coverage to confirm
 
 ### Integration testing with contract tested fakes
 
@@ -1895,7 +1900,7 @@ stateful and parallel testing.
 
 ## Conclusion and future work
 
-* Stateful and parallel testing in ~330 LOC vs the 300LOC of the first version
+* Stateful and parallel testing in ~400 LOC vs the 300LOC of the first version
   of QuickCheck
 
 * How to test bigger systems in a compositional manner by reusing the fakes

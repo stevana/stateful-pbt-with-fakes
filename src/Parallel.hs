@@ -38,10 +38,11 @@ class (StateModel state, Eq state) => ParallelModel state where
   disjointStates :: state -> state -> Bool
   disjointStates _s1 _s2 = False
 
-
+-- start snippet parallel-commands
 newtype ParallelCommands state = ParallelCommands
   { unParallelCommands :: [[Command state (Var (Reference state))]]
   }
+-- end snippet parallel-commands
 deriving stock instance
   Show (Command state (Var (Reference state))) => Show (ParallelCommands state)
 deriving stock instance
@@ -59,9 +60,9 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
         in
           frequency
             [ (1, return [])
-            , (w, do k <- frequency [ (5, return 1) -- 50% single threaded
-                                    , (3, return 2) -- 30% double threaded
-                                    , (2, return 3) -- 20% triple threaded
+            , (w, do k <- frequency [ (50, return 1) -- 50% single threaded
+                                    , (30, return 2) -- 30% double threaded
+                                    , (20, return 3) -- 20% triple threaded
                                     ]
                      mCmds <- vectorOf k (generateCommand s)
                                 `suchThatMaybe` parallelSafe s
@@ -86,13 +87,14 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
                     -> [[Command state (Var (Reference state))]]
       pruneParallel = go initialState Set.empty []
         where
-          go _s _vars acc []             = reverse acc
-          go  s  vars acc (cmds : cmdss) | parallelSafe s cmds =
-            let
-              p = prune s vars cmds
-            in
-              go (prunedState p) (prunedScope p) (prunedCommands p : acc) cmdss
-                                         | otherwise = go s vars acc cmdss
+          go _s _vars acc [] = reverse acc
+          go  s  vars acc (cmds : cmdss)
+            | not (parallelSafe s cmds) = go s vars acc cmdss
+            | otherwise =
+                let
+                  p = prune s vars cmds
+                in
+                  go (prunedState p) (prunedScope p) (prunedCommands p : acc) cmdss
 
           prune :: StateModel state
                 => state -> Set (Var (Reference state))
