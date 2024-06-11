@@ -834,27 +834,40 @@ Let me give you the full definition of the interface and then I'll
 explain it in words afterwards.
 
 ``` haskell
-class ( ... ) => StateModel state where
+class ( ...
+```
 
-  initialState :: state
+``` haskell
+      ) => StateModel state where
 
+  -- If we think of the system under test as a black box, then commands are the
+  -- inputs and responses the outputs to the black box.
   data Command  state :: Type -> Type
   data Response state :: Type -> Type
 
+  -- Sometimes a command needs to refer to a previous response, e.g. when a file
+  -- is opened we get a handle which is later refered to when writing or reading
+  -- form the file. File handles, and similar constructs, are called references
+  -- and can be part of commands and responses.
   type Reference state :: Type
   type Reference state = Void
 
+  -- Not all commands are valid in all states. Pre-conditions allow the user to
+  -- specify when a command is safe to execute, for example we cannot write or
+  -- read to or from an unopened file. The `PreconditionFailure` data type
+  -- allows the user to create custom pre-condition failures. By default now
+  -- pre-condition failures are allowed, thus the `Void` (empty) type.
   type PreconditionFailure state :: Type
   type PreconditionFailure state = Void
 
-  type CommandMonad state :: Type -> Type
-  type CommandMonad state = IO
 
   generateCommand :: state -> Gen (Command state (Var (Reference state)))
 
   shrinkCommand :: state -> Command state (Var (Reference state))
                 -> [Command state (Var (Reference state))]
   shrinkCommand _state _cmd = []
+
+  initialState :: state
 
   runFake :: Command state (Var (Reference state)) -> state
           -> Either (PreconditionFailure state)
@@ -872,6 +885,12 @@ class ( ... ) => StateModel state where
   commandName :: (Show (Command state ref), Show ref)
               => Command state ref -> String
   commandName = head . words . show
+
+  -- Most often the result of executing a command against the system under test
+  -- will live in the IO monad, but sometimes it can be useful to be able a
+  -- choose another monad.
+  type CommandMonad state :: Type -> Type
+  type CommandMonad state = IO
 ```
 
 The interface is parametrised by a `state` type that the user needs to
@@ -994,42 +1013,45 @@ instance StateModel state => Arbitrary (Commands state) where
                        Nothing  -> return []
                        Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
             ]
+```
 
+``` haskell
   shrink :: Commands state -> [Commands state]
-  shrink (Commands cmds) =
-    map (Commands . prune . map fst)
-        (shrinkList shrinker (snd (withStates initialState cmds)))
+  shrink = pruneShrinks . possibleShrinks
     where
-      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+      possibleShrinks :: Commands state -> [Commands state]
+      possibleShrinks = map (Commands . map fst) . shrinkList shrinker
+                      . withStates initialState . unCommands
+        where
+          shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+
+          withStates :: StateModel state
+                     => state -> [Command state (Var (Reference state))]
+                     -> [(Command state (Var (Reference state)), state)]
+          withStates s0 = go s0 []
+            where
+              go _s acc []           = reverse acc
+              go  s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
+
+      pruneShrinks :: [Commands state] -> [Commands state]
+      pruneShrinks = coerce . filter (not . null)
+                   . map (go initialState Set.empty [] . unCommands)
+        where
+          go _s _vars acc [] = reverse acc
+          go  s  vars acc (cmd : cmds)
+            | not (scopeCheck vars cmd) = go s vars acc cmds
+            | otherwise = case runFake cmd s of
+                Left _preconditionFailure -> go s vars acc cmds
+                Right (s', resp) ->
+                  let
+                    returnedVars = Set.fromList (toList resp)
+                    vars' = returnedVars `Set.union` vars
+                  in
+                    go s' vars' (cmd : acc) cmds
 ```
 
-Notice how when we shrink we first compute the state and then shrink the
-command at that state. We do so by help of the following helper
-function:
-
-``` haskell
-withStates :: StateModel state
-           => state -> [Command state (Var (Reference state))]
-           -> (state, [(Command state (Var (Reference state)), state)])
-withStates s0 = go s0 []
-  where
-    go s acc []           = (s, reverse acc)
-    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
-```
-
-Also notice how after shrinking we `prune` away all commands that don't
-pass the precondition:
-
-``` haskell
-prune :: StateModel state
-      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
-prune = go initialState
-  where
-    go _s [] = []
-    go  s (cmd : cmds)
-      | precondition s cmd = cmd : go (nextState s cmd) cmds
-      | otherwise          = go s cmds
-```
+Notice how after shrinking we prune away all commands that don't pass
+the precondition.
 
 The intuition here is that as we remove commands from the originally
 generated `Commands` (which all pass their preconditions), we might have
@@ -1048,9 +1070,9 @@ the `runCommands` function:
 ``` haskell
 runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
-runCommands (Commands cmds0) = go initialState [] cmds0
+runCommands (Commands cmds0) = go initialState emptyEnv cmds0
   where
-    go :: state -> [(Int, Reference state)] -> [Command state (Var (Reference state))]
+    go :: state -> Env state -> [Command state (Var (Reference state))]
        -> PropertyM (CommandMonad state) ()
     go _state _env [] = return ()
     go  state  env (cmd : cmds) = do
@@ -1069,7 +1091,7 @@ runCommands (Commands cmds0) = go initialState [] cmds0
           -- Here we collect all references from the response and store it in
           -- our environment, so that subsequence commands can be substituted.
           let refs   = toList cresp
-              env'   = env ++ zip [length env..] refs
+              env'   = extendEnv env (zip [sizeEnv env..] refs)
               cresp' = fmap (lookupEnv env') resp
               ok     = cresp == cresp'
           unless ok $
@@ -1078,12 +1100,12 @@ runCommands (Commands cmds0) = go initialState [] cmds0
           -- implementation agree.
           assert ok
           go state' env' cmds
+```
 
-lookupEnv :: [(Int, a)] -> Var a -> a
-lookupEnv env (Var x) =
-  case lookup x env of
-    Nothing  -> discard -- ^ This can happen if a shrink step makes a variable unbound.
-    Just ref -> ref
+Where `Env` is defined as follows.
+
+``` haskell
+newtype Env state = Env { unEnv :: IntMap (Reference state) }
 ```
 
 That's all the pieces we need to implement that `Counter` example that

@@ -775,44 +775,9 @@ Let me give you the full definition of the interface and then I'll explain it in
 words afterwards.
 
 ```haskell
-class ( ... ) => StateModel state where
-
-  initialState :: state
-
-  data Command  state :: Type -> Type
-  data Response state :: Type -> Type
-
-  type Reference state :: Type
-  type Reference state = Void
-
-  type PreconditionFailure state :: Type
-  type PreconditionFailure state = Void
-
-  type CommandMonad state :: Type -> Type
-  type CommandMonad state = IO
-
-  generateCommand :: state -> Gen (Command state (Var (Reference state)))
-
-  shrinkCommand :: state -> Command state (Var (Reference state))
-                -> [Command state (Var (Reference state))]
-  shrinkCommand _state _cmd = []
-
-  runFake :: Command state (Var (Reference state)) -> state
-          -> Either (PreconditionFailure state)
-                    (state, Response state (Var (Reference state)))
-
-  runReal :: Command state (Reference state)
-          -> CommandMonad state (Response state (Reference state))
-
-  monitoring :: (state, state)
-             -> Command state (Reference state)
-             -> Response state (Reference state)
-             -> Property -> Property
-  monitoring _states _cmd _resp = id
-
-  commandName :: (Show (Command state ref), Show ref)
-              => Command state ref -> String
-  commandName = head . words . show
+class ( ...
+```
+```haskell {include=src/Stateful.hs snippet=StateModel}
 ```
 
 The interface is parametrised by a `state` type that the user needs to define
@@ -875,9 +840,7 @@ minimal counterexample.
 Let's start by defining `Commands`, notice that they use symbolic references
 (i.e. `Var (Reference state)`):
 
-```haskell
-newtype Commands state = Commands
-  { unCommands :: [Command state (Var (Reference state))] }
+```haskell {include=src/Stateful.hs snippet=Commands}
 ```
 
 As mentioned above, when we generate commands we cannot generate real
@@ -887,22 +850,12 @@ isomorphic to just an `Int`.
 Sometimes it's convenient to split up `runFake` into two parts, the first checks
 if the command is allowed in the current state, i.e. the precondition holds:
 
-```haskell
-precondition :: StateModel state
-             => state -> Command state (Var (Reference state)) -> Bool
-precondition s cmd = case runFake cmd s of
-  Left _  -> False
-  Right _ -> True
+```haskell {include=src/Stateful.hs snippet=precondition}
 ```
 
 And the second part advances the state:
 
-```haskell
-nextState :: StateModel state
-          => state -> Command state (Var (Reference state)) -> state
-nextState s cmd = case runFake cmd s of
-  Right (s', _) -> s'
-  Left _err -> error "nextState: impossible, we checked for success in precondition"
+```haskell {include=src/Stateful.hs snippet=nextState}
 ```
 
 We assume that we'll only ever look at the `nextState` when the `precondition`
@@ -911,60 +864,14 @@ holds.
 Using these two functions we can implement QuickCheck's `Arbitrary` type class
 for `Commands` which let's us generate and shrink `Commands`:
 
-```haskell
-instance StateModel state => Arbitrary (Commands state) where
-
-  arbitrary :: Gen (Commands state)
-  arbitrary = Commands <$> genCommands initialState
-    where
-      genCommands :: StateModel state
-                  => state -> Gen [Command state (Var (Reference state))]
-      genCommands s = sized $ \n ->
-        let
-          w = n `div` 2 + 1
-        in
-          frequency
-            [ (1, return [])
-            , (w, do mcmd <- generateCommand s `suchThatMaybe` precondition s
-                     case mcmd of
-                       Nothing  -> return []
-                       Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
-            ]
-
-  shrink :: Commands state -> [Commands state]
-  shrink (Commands cmds) =
-    map (Commands . prune . map fst)
-        (shrinkList shrinker (snd (withStates initialState cmds)))
-    where
-      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+```haskell {include=src/Stateful.hs snippet=arbitrary}
 ```
 
-Notice how when we shrink we first compute the state and then shrink the command
-at that state. We do so by help of the following helper function:
-
-```haskell
-withStates :: StateModel state
-           => state -> [Command state (Var (Reference state))]
-           -> (state, [(Command state (Var (Reference state)), state)])
-withStates s0 = go s0 []
-  where
-    go s acc []           = (s, reverse acc)
-    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
+```haskell {include=src/Stateful.hs snippet=shrink}
 ```
 
-Also notice how after shrinking we `prune` away all commands that don't pass the
-precondition:
-
-```haskell
-prune :: StateModel state
-      => [Command state (Var (Reference state))] -> [Command state (Var (Reference state))]
-prune = go initialState
-  where
-    go _s [] = []
-    go  s (cmd : cmds)
-      | precondition s cmd = cmd : go (nextState s cmd) cmds
-      | otherwise          = go s cmds
-```
+Notice how after shrinking we prune away all commands that don't pass the
+precondition.
 
 The intuition here is that as we remove commands from the originally generated
 `Commands` (which all pass their preconditions), we might have broken some
@@ -979,45 +886,12 @@ the real system using `runFake` and `runReal`. In the process of doing so
 need to substitute symbolic references for real references. This, together
 coverage statatistics bookkeeping, is done in the `runCommands` function:
 
-```haskell
-runCommands :: forall state. StateModel state
-            => Commands state -> PropertyM (CommandMonad state) ()
-runCommands (Commands cmds0) = go initialState [] cmds0
-  where
-    go :: state -> [(Int, Reference state)] -> [Command state (Var (Reference state))]
-       -> PropertyM (CommandMonad state) ()
-    go _state _env [] = return ()
-    go  state  env (cmd : cmds) = do
-      case runFake cmd state of
-        Left err -> do
-          monitor (counterexample ("Preconditon failed: " ++ show err))
-          assert False
-        Right (state', resp) -> do
-          let name = commandName cmd
-          monitor (tabulate "Commands" [name] . classify True name)
-          -- Here we substitute all symbolic references for real ones:
-          let ccmd = fmap (lookupEnv env) cmd
-          cresp <- run (runReal ccmd)
-          monitor (counterexample (show cmd ++ " --> " ++ show cresp))
-          monitor (monitoring (state, state') ccmd cresp)
-          -- Here we collect all references from the response and store it in
-          -- our environment, so that subsequence commands can be substituted.
-          let refs   = toList cresp
-              env'   = env ++ zip [length env..] refs
-              cresp' = fmap (lookupEnv env') resp
-              ok     = cresp == cresp'
-          unless ok $
-            monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
-          -- And finally here's where we assert that the model and the real
-          -- implementation agree.
-          assert ok
-          go state' env' cmds
+```haskell {include=src/Stateful.hs snippet=runCommands}
+```
 
-lookupEnv :: [(Int, a)] -> Var a -> a
-lookupEnv env (Var x) =
-  case lookup x env of
-    Nothing  -> discard -- ^ This can happen if a shrink step makes a variable unbound.
-    Just ref -> ref
+Where `Env` is defined as follows.
+
+```haskell {include=src/Stateful.hs snippet=Env}
 ```
 
 That's all the pieces we need to implement that `Counter` example that we saw
@@ -1858,7 +1732,7 @@ XXX: extend StateModel class:
 ```haskell {include=src/Parallel.hs snippet=env}
 ```
 
-```haskell {include=src/Parallel.hs snippet=run}
+```haskell {include=src/Parallel.hs snippet=runParallelCommands}
 ```
 
 

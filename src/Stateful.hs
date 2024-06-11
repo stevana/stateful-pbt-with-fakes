@@ -40,7 +40,7 @@ class ( Monad (CommandMonad state)
       , Show (Response state (Var (Reference state)))
       , Show (Reference state)
       , Show (PreconditionFailure state)
--- start snippet stateful-class
+-- start snippet StateModel
       ) => StateModel state where
 
   -- If we think of the system under test as a black box, then commands are the
@@ -94,13 +94,16 @@ class ( Monad (CommandMonad state)
   -- choose another monad.
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
--- end snippet stateful-class
+-- end snippet StateModel
 
 ------------------------------------------------------------------------
 
+-- start snippet Var
 data Var a = Var Int
   deriving stock (Show, Eq, Ord)
+-- end snippet Var
 
+-- start snippet NonFoldable
 newtype NonFoldable a = NonFoldable a
   deriving stock (Eq, Show)
 
@@ -109,29 +112,37 @@ instance Functor NonFoldable where
 
 instance Foldable NonFoldable where
   foldMap _f (NonFoldable _x) = mempty
+-- end snippet NonFoldable
 
 ------------------------------------------------------------------------
 
 -- * Generating and shrinking
 
+-- start snippet Commands
 newtype Commands state = Commands
   { unCommands :: [Command state (Var (Reference state))] }
+-- end snippet Commands
 deriving stock instance Show (Command state (Var (Reference state))) => Show (Commands state)
 
 -- The precondition for a command is the same as the fake returning a value.
+-- start snippet precondition
 precondition :: StateModel state
              => state -> Command state (Var (Reference state)) -> Bool
 precondition s cmd = case runFake cmd s of
   Left _  -> False
   Right _ -> True
+-- end snippet precondition
 
 -- Get the next state by running the fake. Assumes that the precondition holds.
+-- start snippet nextState
 nextState :: StateModel state
           => state -> Command state (Var (Reference state)) -> state
 nextState s cmd = case runFake cmd s of
   Right (s', _) -> s'
   Left _err -> error "nextState: impossible, we checked for success in precondition"
+-- end snippet nextState
 
+-- start snippet arbitrary
 instance StateModel state => Arbitrary (Commands state) where
 
   arbitrary :: Gen (Commands state)
@@ -150,7 +161,9 @@ instance StateModel state => Arbitrary (Commands state) where
                        Nothing  -> return []
                        Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
             ]
+-- end snippet arbitrary
 
+-- start snippet shrink
   shrink :: Commands state -> [Commands state]
   shrink = pruneShrinks . possibleShrinks
     where
@@ -183,12 +196,15 @@ instance StateModel state => Arbitrary (Commands state) where
                     vars' = returnedVars `Set.union` vars
                   in
                     go s' vars' (cmd : acc) cmds
+-- end snippet shrink
 
+-- start snippet scopeCheck
 scopeCheck :: Foldable (Command state)
            => Set (Var a) -> Command state (Var a) -> Bool
 scopeCheck varsInScope cmd = usedVars `Set.isSubsetOf` varsInScope
   where
     usedVars = Set.fromList (toList cmd)
+-- end snippet scopeCheck
 
 ------------------------------------------------------------------------
 
@@ -206,6 +222,8 @@ scopeCheck varsInScope cmd = usedVars `Set.isSubsetOf` varsInScope
 --
 -- Another option would be to introduce a new type class `ReturnsReferences` and
 -- ask the user to manually implement it.
+
+-- start snippet runCommands
 runCommands :: forall state. StateModel state
             => Commands state -> PropertyM (CommandMonad state) ()
 runCommands (Commands cmds0) = go initialState emptyEnv cmds0
@@ -221,20 +239,28 @@ runCommands (Commands cmds0) = go initialState emptyEnv cmds0
         Right (state', resp) -> do
           let name = commandName cmd
           monitor (tabulate "Commands" [name] . classify True name)
+          -- Here we substitute all symbolic references for real ones:
           let ccmd = fmap (lookupEnv env) cmd
           cresp <- run (runReal ccmd)
           monitor (counterexample (show cmd ++ " --> " ++ show cresp))
           monitor (monitoring (state, state') ccmd cresp)
+          -- Here we collect all references from the response and store it in
+          -- our environment, so that subsequence commands can be substituted.
           let refs   = toList cresp
               env'   = extendEnv env (zip [sizeEnv env..] refs)
               cresp' = fmap (lookupEnv env') resp
               ok     = cresp == cresp'
           unless ok $
             monitor (counterexample ("Expected: " ++ show cresp' ++ "\nGot: " ++ show cresp))
+          -- And finally here's where we assert that the model and the real
+          -- implementation agree.
           assert ok
           go state' env' cmds
+-- end snippet runCommands
 
+-- start snippet Env
 newtype Env state = Env { unEnv :: IntMap (Reference state) }
+-- end snippet Env
 
 sizeEnv :: Env state -> Int
 sizeEnv (Env im) = IntMap.size im
@@ -247,9 +273,6 @@ lookupEnv (Env im) (Var i) = im IntMap.! i
 
 extendEnv :: Env state -> [(Int, Reference state)] -> Env state
 extendEnv (Env im) refs = Env (im `IntMap.union` IntMap.fromList refs)
-
--- extendEnv' :: Env state -> [(Var (Reference state), Reference state)] -> Env state
--- extendEnv' (Env im) env' = Env (im `IntMap.union` IntMap.fromList (map (\(Var i, ref) -> (i, ref)) refs))
 
 combineEnvs :: [Env state] -> Env state
 combineEnvs = Env . IntMap.unions . map unEnv

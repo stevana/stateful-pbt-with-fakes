@@ -267,7 +267,7 @@ extendEnvParallel env c refs = do
 
 ------------------------------------------------------------------------
 
--- start snippet run
+-- start snippet runParallelCommands
 runParallelCommands :: forall state. ParallelModel state
                     => ParallelCommands state -> PropertyM IO ()
 runParallelCommands cmds0@(ParallelCommands forks0) = do
@@ -309,4 +309,4 @@ runParallelCommands cmds0@(ParallelCommands forks0) = do
           env' <- extendEnvParallel env c (toList resp)
           atomically (writeTQueue q (Ok pid resp))
           return env'
--- end snippet run
+-- end snippet runParallelCommands
