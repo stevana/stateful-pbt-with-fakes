@@ -1748,7 +1748,7 @@ commands to produce a concurrent history.
 
 First we need define what a parallel program is:
 
-```haskell {include=src/Parallel.hs snippet=parallel-commands}
+```haskell {include=src/Parallel.hs snippet=ParallelCommands}
 ```
 
 The idea is that the inner list of commands gets executed in parallel, this list
@@ -1756,9 +1756,14 @@ will only be between one and three commands long. After each such single, double
 or triple threaded exeuction there might more, this is what the outer list
 captures.
 
+
+```haskell {include=src/Parallel.hs snippet=ParallelModel}
+```
+
+
 We can write a generator
 
-```haskell {include=src/Parallel.hs snippet=parallel-generator}
+```haskell {include=src/Parallel.hs snippet=arbitrary}
 ```
 
 The problem with preconditions in the parallel case
@@ -1824,9 +1829,20 @@ ParallelCommands
     ```
 
 
+```haskell {include=src/Parallel.hs snippet=shrink}
+```
 * shrinking can be improved, see qsm
 
 ##### Linearisability checking
+
+```haskell {include=src/Parallel.hs snippet=History}
+```
+
+```haskell {include=src/Parallel.hs snippet=interleavings}
+```
+
+```haskell {include=src/Parallel.hs snippet=linearisable}
+```
 
 ##### Parallel running
 
@@ -1838,6 +1854,13 @@ XXX: extend StateModel class:
   -- monad we can execute on different threads.
   runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 ```
+
+```haskell {include=src/Parallel.hs snippet=env}
+```
+
+```haskell {include=src/Parallel.hs snippet=run}
+```
+
 
 #### Example: parallel counter
 
@@ -1984,6 +2007,7 @@ stateful and parallel testing.
   for library implementors
 
 * repo where people can open issues and ask questions and explore improvements
+  + examples that can be described / generated
 
 * Having a compact code base makes it cheaper to make experimental changes.
 

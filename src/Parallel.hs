@@ -31,6 +31,7 @@ import Stateful
 
 ------------------------------------------------------------------------
 
+-- start snippet ParallelModel
 class (StateModel state, Ord state) => ParallelModel state where
 
   -- If another command monad is used we need to provide a way run it inside the
@@ -46,15 +47,16 @@ class (StateModel state, Ord state) => ParallelModel state where
   shrinkCommandParallel :: [state] -> Command state (Var (Reference state))
                         -> [Command state (Var (Reference state))]
   shrinkCommandParallel ss cmd = shrinkCommand (maximum ss) cmd
+-- end snippet ParallelModel
 
--- start snippet parallel-commands
+-- start snippet ParallelCommands
 newtype ParallelCommands state = ParallelCommands [Fork state]
 
 newtype Fork state = Fork [Command state (Var (Reference state))]
--- end snippet parallel-commands
+-- end snippet ParallelCommands
 
 unParallelCommands :: ParallelCommands state -> [Fork state]
-unParallelCommands (ParallelCommands cmdss) = cmdss
+unParallelCommands (ParallelCommands forks) = forks
 
 unFork :: Fork state -> [Command state (Var (Reference state))]
 unFork (Fork cmds) = cmds
@@ -74,7 +76,7 @@ parallelCommands = concat . coerce @_ @[[Command state (Var (Reference state))]]
 
 instance ParallelModel state => Arbitrary (ParallelCommands state) where
 
-  -- start snippet parallel-generator
+  -- start snippet arbitrary
   arbitrary :: Gen (ParallelCommands state)
   arbitrary = ParallelCommands <$> go [initialState]
     where
@@ -96,11 +98,11 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
                        Just cmds ->
                          (Fork cmds :) <$> go (nextStates ss cmds))
             ]
-  -- end snippet parallel-generator
+  -- end snippet arbitrary
 
   -- TODO: Improve by: moving commands from forks into non forks and moving
   -- forks after non forks.
-  -- start snippet parallel-shrink
+  -- start snippet shrink
   shrink :: ParallelCommands state -> [ParallelCommands state]
   shrink = pruneShrinks . possibleShrinks
     where
@@ -149,7 +151,7 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
               error "getReturnedVars: impossible, parallelSafe checks that all preconditions hold"
             Right (_s', resp) ->
               getReturnedVars s (vars `Set.union` Set.fromList (toList resp)) cmds
-  -- end snippet parallel-shrink
+  -- end snippet shrink
 
 -- start snippet parallelSafe
 parallelSafe :: ParallelModel state => [state] -> Fork state -> Bool
@@ -172,6 +174,7 @@ nextStates ss cmds = nubOrd [ foldl' nextState s cmds | s <- ss ]
 
 ------------------------------------------------------------------------
 
+-- start snippet History
 newtype History state = History [Event state]
 deriving stock instance
    (Show (Command state (Var (Reference state))),
@@ -187,11 +190,13 @@ deriving stock instance
 newtype Pid = Pid Int
   deriving stock (Eq, Ord, Show)
   deriving newtype Enum
-
-data Op state = Op (Command state (Var (Reference state)))
-                   (Response state (Reference state))
+-- end snippet History
 
 ------------------------------------------------------------------------
+
+-- start snippet interleavings
+data Op state = Op (Command state (Var (Reference state)))
+                   (Response state (Reference state))
 
 interleavings :: History state -> Forest (Op state)
 interleavings (History [])  = []
@@ -221,7 +226,9 @@ interleavings (History evs0) =
     filter1 _ []                   = []
     filter1 p (x : xs) | p x       = x : filter1 p xs
                        | otherwise = xs
+-- end snippet interleavings
 
+-- start snippet linearisable
 linearisable :: forall state. StateModel state
              => Env state -> Forest (Op state) -> Bool
 linearisable env = any' (go initialState)
@@ -237,9 +244,11 @@ linearisable env = any' (go initialState)
     any' :: (a -> Bool) -> [a] -> Bool
     any' _p [] = True
     any'  p xs = any p xs
+-- end snippet linearisable
 
 ------------------------------------------------------------------------
 
+-- start snippet env
 newtype AtomicCounter = AtomicCounter (IORef Int)
 
 newAtomicCounter :: IO AtomicCounter
@@ -254,9 +263,11 @@ extendEnvParallel :: Env state -> AtomicCounter -> [Reference state] -> IO (Env 
 extendEnvParallel env c refs = do
   i <- incrAtomicCounter c (length refs)
   return (extendEnv env (zip [i..] refs))
+-- end snippet env
 
 ------------------------------------------------------------------------
 
+-- start snippet run
 runParallelCommands :: forall state. ParallelModel state
                     => ParallelCommands state -> PropertyM IO ()
 runParallelCommands cmds0@(ParallelCommands forks0) = do
@@ -264,39 +275,38 @@ runParallelCommands cmds0@(ParallelCommands forks0) = do
     let name = commandName cmd
     monitor (tabulate "Commands" [name] . classify True name)
   monitor (tabulate "Concurrency" (map (show . length . unFork) forks0))
-  evs <- liftIO newTQueueIO
+  q   <- liftIO newTQueueIO
   c   <- liftIO newAtomicCounter
-  env <- runForks evs c emptyEnv forks0
-  hist <- History <$> liftIO (atomically (flushTQueue evs))
+  env <- liftIO (runForks q c emptyEnv forks0)
+  hist <- History <$> liftIO (atomically (flushTQueue q))
   monitor (counterexample (show hist))
   assert (linearisable env (interleavings hist))
   where
-    runForks _evs _c env [] = return env
-    runForks  evs  c env (Fork cmds : forks) = do
+    runForks :: TQueue (Event state) -> AtomicCounter -> Env state -> [Fork state]
+             -> IO (Env state)
+    runForks _q _c env [] = return env
+    runForks  q  c env (Fork cmds : forks) = do
       envs <- liftIO $
-        mapConcurrently (runParallelReal evs c env) (zip [Pid 0..] cmds)
+        mapConcurrently (runParallelReal q c env) (zip [Pid 0..] cmds)
       let env' = combineEnvs (env : envs)
-      runForks evs c env' forks
+      runForks q c env' forks
 
-runParallelReal :: forall state. ParallelModel state
-                => TQueue (Event state)
-                -> AtomicCounter
-                -> Env state
-                -> (Pid, Command state (Var (Reference state)))
-                -> IO (Env state)
-runParallelReal evs c env (pid, cmd) = do
-  liftIO (atomically (writeTQueue evs (Invoke pid cmd)))
-  eResp <- try (runCommandMonad (Proxy :: Proxy state) (runReal (fmap (lookupEnv env) cmd)))
-  case eResp of
-    Left (err :: SomeException) ->
-      error ("runParallelReal: " ++ displayException err)
-    Right resp -> do
-      -- NOTE: It's important that we extend the environment before writing `Ok`
-      -- to the history, otherwise we might get scope issues.
+    runParallelReal :: TQueue (Event state) -> AtomicCounter -> Env state
+                    -> (Pid, Command state (Var (Reference state))) -> IO (Env state)
+    runParallelReal q c env (pid, cmd) = do
+      atomically (writeTQueue q (Invoke pid cmd))
+      eResp <- try (runCommandMonad (Proxy :: Proxy state) (runReal (fmap (lookupEnv env) cmd)))
+      case eResp of
+        Left (err :: SomeException) ->
+          error ("runParallelReal: " ++ displayException err)
+        Right resp -> do
+          -- NOTE: It's important that we extend the environment before writing `Ok`
+          -- to the history, otherwise we might get scope issues.
 
-      -- XXX: Move outside of mapConcurrently? How do we assign the right `Var`
-      -- with each `Reference`? Perhaps this would be easier if we had a prefix
-      -- and N suffixes?
-      env' <- extendEnvParallel env c (toList resp)
-      liftIO (atomically (writeTQueue evs (Ok pid resp)))
-      return env'
+          -- XXX: Move outside of mapConcurrently? How do we assign the right `Var`
+          -- with each `Reference`? Perhaps this would be easier if we had a prefix
+          -- and N suffixes?
+          env' <- extendEnvParallel env c (toList resp)
+          atomically (writeTQueue q (Ok pid resp))
+          return env'
+-- end snippet run

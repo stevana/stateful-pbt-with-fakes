@@ -40,6 +40,7 @@ class ( Monad (CommandMonad state)
       , Show (Response state (Var (Reference state)))
       , Show (Reference state)
       , Show (PreconditionFailure state)
+-- start snippet stateful-class
       ) => StateModel state where
 
   -- If we think of the system under test as a black box, then commands are the
@@ -93,6 +94,7 @@ class ( Monad (CommandMonad state)
   -- choose another monad.
   type CommandMonad state :: Type -> Type
   type CommandMonad state = IO
+-- end snippet stateful-class
 
 ------------------------------------------------------------------------
 

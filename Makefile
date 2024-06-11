@@ -1,2 +1,2 @@
-README.md:
-	pandoc --filter pandoc-include-code README-unprocessed.md -o README.md
+README.md: README-unprocessed.md
+	pandoc --filter pandoc-include-code $? -o $@
