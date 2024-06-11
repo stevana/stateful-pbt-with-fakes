@@ -74,8 +74,9 @@ badarg = error "bad argument"
 
 kill :: ThreadId -> IO ()
 kill tid = do
-  killThread tid
-  waitUntilDead 1000
+  withMVar lock $ \_ -> do
+    killThread tid
+    waitUntilDead 1000
   where
     waitUntilDead :: Int -> IO ()
     waitUntilDead 0 = error "kill: thread didn't die"

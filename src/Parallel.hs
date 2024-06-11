@@ -1,5 +1,4 @@
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-} {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
@@ -14,6 +13,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception (SomeException, displayException, try)
 import Control.Monad.IO.Class
+import Data.Containers.ListUtils (nubOrd)
 import Data.Foldable
 import Data.IORef
 import Data.List (permutations)
@@ -23,38 +23,61 @@ import qualified Data.Set as Set
 import Data.Tree
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
+import Data.Coerce
 
 import Stateful
 
 ------------------------------------------------------------------------
 
-class (StateModel state, Eq state) => ParallelModel state where
+class (StateModel state, Ord state) => ParallelModel state where
 
   -- If another command monad is used we need to provide a way run it inside the
   -- IO monad. This is only needed for parallel testing, because IO is the only
   -- monad we can execute on different threads.
   runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 
-  disjointStates :: state -> state -> Bool
-  disjointStates _s1 _s2 = False
+  generateCommandParallel :: [state] -> Gen (Command state (Var (Reference state)))
+  generateCommandParallel ss = do
+    s <- elements ss
+    generateCommand s
+
+  shrinkCommandParallel :: [state] -> Command state (Var (Reference state))
+                        -> [Command state (Var (Reference state))]
+  shrinkCommandParallel ss cmd = shrinkCommand (maximum ss) cmd
 
 -- start snippet parallel-commands
-newtype ParallelCommands state = ParallelCommands
-  { unParallelCommands :: [[Command state (Var (Reference state))]]
-  }
+newtype ParallelCommands state = ParallelCommands [Fork state]
+
+newtype Fork state = Fork [Command state (Var (Reference state))]
 -- end snippet parallel-commands
+
+unParallelCommands :: ParallelCommands state -> [Fork state]
+unParallelCommands (ParallelCommands cmdss) = cmdss
+
+unFork :: Fork state -> [Command state (Var (Reference state))]
+unFork (Fork cmds) = cmds
+
 deriving stock instance
   Show (Command state (Var (Reference state))) => Show (ParallelCommands state)
 deriving stock instance
   Eq (Command state (Var (Reference state))) => Eq (ParallelCommands state)
 
+deriving stock instance
+  Show (Command state (Var (Reference state))) => Show (Fork state)
+deriving stock instance
+  Eq (Command state (Var (Reference state))) => Eq (Fork state)
+
+parallelCommands :: ParallelCommands state -> [[Command state (Var (Reference state))]]
+parallelCommands = coerce
+
 instance ParallelModel state => Arbitrary (ParallelCommands state) where
 
+  -- start snippet parallel-generator
   arbitrary :: Gen (ParallelCommands state)
-  arbitrary = ParallelCommands <$> go initialState
+  arbitrary = ParallelCommands <$> go [initialState]
     where
-      go :: state -> Gen [[Command state (Var (Reference state))]]
-      go s = sized $ \n ->
+      go :: [state] -> Gen [Fork state]
+      go ss = sized $ \n ->
         let
           w = n `div` 2 + 1
         in
@@ -64,98 +87,80 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
                                     , (30, return 2) -- 30% double threaded
                                     , (20, return 3) -- 20% triple threaded
                                     ]
-                     mCmds <- vectorOf k (generateCommand s)
-                                `suchThatMaybe` parallelSafe s
+                     mCmds <- vectorOf k (generateCommandParallel ss)
+                                `suchThatMaybe` (parallelSafe ss . Fork)
                      case mCmds of
                        Nothing   -> return []
-                       Just cmds -> (cmds :) <$> go (nextStateParallel s cmds))
+                       Just cmds ->
+                         (Fork cmds :) <$> go (nextStates ss cmds))
             ]
+  -- end snippet parallel-generator
 
   -- TODO: Improve by: moving commands from forks into non forks and moving
   -- forks after non forks.
   shrink :: ParallelCommands state -> [ParallelCommands state]
-  shrink (ParallelCommands cmdss0)
-    = map (ParallelCommands . pruneParallel . map (map fst))
-          (shrinkList (shrinkList shrinker) (withParStates cmdss0))
+  shrink = pruneShrinks . possibleShrinks
     where
-      shrinker :: (Command state (Var (Reference state)), state)
-               -> [(Command state (Var (Reference state)), state)]
-      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
-
-      pruneParallel :: StateModel state
-                    => [[Command state (Var (Reference state))]]
-                    -> [[Command state (Var (Reference state))]]
-      pruneParallel = go initialState Set.empty []
+      possibleShrinks :: ParallelCommands state -> [ParallelCommands state]
+      possibleShrinks
+        = map (coerce . map (map fst))
+        . shrinkList (shrinkList shrinker) . withParStates . unParallelCommands
         where
-          go _s _vars acc [] = reverse acc
-          go  s  vars acc (cmds : cmdss)
-            | not (parallelSafe s cmds) = go s vars acc cmdss
-            | otherwise =
-                let
-                  p = prune s vars cmds
-                in
-                  go (prunedState p) (prunedScope p) (prunedCommands p : acc) cmdss
-
-          prune :: StateModel state
-                => state -> Set (Var (Reference state))
-                -> [Command state (Var (Reference state))]
-                -> Pruned state
-          prune s0 vars0 = go' s0 vars0 []
+          withParStates :: (StateModel state, Ord state)
+                        => [Fork state]
+                        -> [[(Command state (Var (Reference state)), [state])]]
+          withParStates = go [initialState] [] . coerce
             where
-              go' s vars acc [] = Pruned s vars (reverse acc)
-              go' s vars acc (cmd : cmds)
-                 | not (scopeCheck vars0 cmd) = go' s vars acc cmds
-                 -- ^ NOTE: We always check scope against `vars0`, i.e. the
-                 -- scope *before* any of this batch of commands which will be
-                 -- executed in parallel. If we'd used `vars`, then we would
-                 -- allow two parallel commands to affect each other's scope,
-                 -- which can lead to scope errors in some interleavings.
-                 | otherwise = case runFake cmd s of
-                    Left _preconditionFailure ->
-                      error "prune, impossible: already checked in parallelSafe"
-                    Right (s', resp) ->
-                      let
-                        returnedVars = Set.fromList (toList resp)
-                        vars' = returnedVars `Set.union` vars
-                      in
-                        go' s' vars' (cmd : acc) cmds
+              go _ss acc []             = reverse acc
+              go  ss acc (cmds : cmdss) =
+                go (nextStates ss cmds) (map (\cmd -> (cmd, ss)) cmds : acc) cmdss
 
-parallelSafe :: ParallelModel state
-             => state -> [Command state (Var (Reference state))] -> Bool
-parallelSafe s cmds0 = preconditionsHold && endUpInSameOrDisjointStates
+          shrinker :: (Command state (Var (Reference state)), [state])
+                   -> [(Command state (Var (Reference state)), [state])]
+          shrinker (cmd, ss) = [ (cmd', ss) | cmd' <- shrinkCommandParallel ss cmd ]
+
+      pruneShrinks :: [ParallelCommands state] -> [ParallelCommands state]
+      pruneShrinks = coerce . filter (not . null)
+                   . map (go [initialState] Set.empty [] . unParallelCommands)
+        where
+          go :: [state] -> Set (Var (Reference state)) -> [Fork state] -> [Fork state] -> [Fork state]
+          go _ss _vars acc [] = reverse acc
+          go  ss  vars acc (fork@(Fork cmds) : forks)
+            | all (scopeCheck vars) cmds
+            , parallelSafe ss fork =
+              let
+                ss'   = nextStates ss cmds
+                vars' = getReturnedVars (head ss) vars cmds -- NOTE: head is safe
+              in
+                go ss' vars' (fork : acc) forks
+            | otherwise            = go ss vars acc forks
+
+          -- It doesn't matter which of the possible states we start in, as all
+          -- commands in a fork pass their preconditions in all states. It also
+          -- doesn't matter in which interleaving we gather the responses, as
+          -- all we do is collect the `Var`s that get returned into an unordered
+          -- `Set`.
+          getReturnedVars _s vars [] = vars
+          getReturnedVars s vars (cmd : cmds) = case runFake cmd s of
+            Left _preconditionFailed ->
+              error "getReturnedVars: impossible, parallelSafe checks that all preconditions hold"
+            Right (_s', resp) ->
+              getReturnedVars s (vars `Set.union` Set.fromList (toList resp)) cmds
+
+parallelSafe :: ParallelModel state => [state] -> Fork state -> Bool
+parallelSafe ss (Fork cmds0) = and
+  [ preconditionsHold s cmds | s <- toList ss, cmds <- permutations cmds0 ]
   where
-     preconditionsHold = all (go s) (permutations cmds0)
-       where
-         go _s' [] = True
-         go  s' (cmd : cmds)
-           | precondition s' cmd = go (nextState s' cmd) cmds
-           | otherwise           = False
+    preconditionsHold s0 = all (go s0) . permutations
+      where
+        go _s [] = True
+        go  s (cmd : cmds)
+          | precondition s cmd = go (nextState s cmd) cmds
+          | otherwise          = False
 
-     endUpInSameOrDisjointStates = and
-       [ nextState s l == nextState s r ||
-         disjointStates (nextState s l) (nextState s r)
-       | (l, r) <- pairwise cmds0
-       ]
-
-pairwise :: [a] -> [(a, a)]
-pairwise []       = []
-pairwise (x : xs) = [ (x, y) | y <- xs ] ++ pairwise xs
-
-withParStates :: StateModel state
-              => [[Command state (Var (Reference state))]]
-              -> [[(Command state (Var (Reference state)), state)]]
-withParStates = go initialState
-  where
-    go _s []             = []
-    go  s (cmds : cmdss) =
-      let
-        (s', cmdsAndStates) = withStates s cmds
-      in
-        cmdsAndStates : go s' cmdss
-
-nextStateParallel :: StateModel state
-                  => state -> [Command state (Var (Reference state))] -> state
-nextStateParallel s cmds = foldl' nextState s cmds
+nextStates :: (StateModel state, Ord state)
+           => [state] -> [Command state (Var (Reference state))] -> [state]
+nextStates ss cmds = nubOrd [ foldl' nextState s cmds | s <- ss ]
 
 ------------------------------------------------------------------------
 
@@ -250,13 +255,13 @@ extendEnvParallel env c refs = do
 runParallelCommands :: forall state. ParallelModel state
                     => ParallelCommands state -> PropertyM IO ()
 runParallelCommands (ParallelCommands cmdss0) = do
-  forM_ (concat cmdss0) $ \cmd ->
+  forM_ (concat (map unFork cmdss0)) $ \cmd ->
     let name = commandName cmd in
       monitor (tabulate "Commands" [name] . classify True name)
-  monitor (tabulate "Concurrency" (map (show . length) cmdss0))
+  monitor (tabulate "Concurrency" (map (show . length . unFork) cmdss0))
   evs <- liftIO newTQueueIO
   c <- liftIO newAtomicCounter
-  env <- go evs c emptyEnv cmdss0
+  env <- go evs c emptyEnv (coerce cmdss0)
   hist <- History <$> liftIO (atomically (flushTQueue evs))
   monitor (counterexample (show hist))
   assert (linearisable env (interleavings hist))
@@ -284,6 +289,7 @@ runParallelReal evs c env cmd = do
     Right resp -> do
       -- NOTE: It's important that we extend the environment before writing `Ok`
       -- to the history, otherwise we might get scope issues.
+      -- XXX: move out
       env' <- extendEnvParallel env c (toList resp)
       liftIO (atomically (writeTQueue evs (Ok pid resp)))
       return env'

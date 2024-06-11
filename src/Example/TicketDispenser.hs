@@ -21,7 +21,7 @@ import Opaque
 ------------------------------------------------------------------------
 
 data State = NoState | State Int
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance StateModel State where
 

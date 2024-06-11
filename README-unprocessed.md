@@ -1746,8 +1746,83 @@ commands to produce a concurrent history.
 
 ##### Parallel program generation and shrinking
 
+First we need define what a parallel program is:
+
 ```haskell {include=src/Parallel.hs snippet=parallel-commands}
 ```
+
+The idea is that the inner list of commands gets executed in parallel, this list
+will only be between one and three commands long. After each such single, double
+or triple threaded exeuction there might more, this is what the outer list
+captures.
+
+We can write a generator
+
+```haskell {include=src/Parallel.hs snippet=parallel-generator}
+```
+
+The problem with preconditions in the parallel case
+
+  1. in the sequential case a precondition is a contract that needs to be
+     fulfilled by the client before the command is issued. In the parallel case
+     there are multiple clients, so it could be the case that one client
+     unknowingly breaks another clients precondition.
+
+     E.g. `Fork (Rename "x" "y") (Remove "x")`, where the precondition for both
+     commands is that "x" exists. If `Rename` gets executed first then it would
+     break `Remove`'s precondition and vice versa.
+
+  2. Drop all preconditions in the parallel case and make all commands be able
+     to fail gracefully instead of crashing, e.g. `Remove_ (Either Doesn'tExist
+     ())`. The problem with this approach is that examples such as the ticket
+     dispenser have initialisation commands such as `New` which create a ticket
+     dispenser reference upon which the later commands depend on, so without
+     preconditions forbidding more than one `New` we can end up generating:
+     `Fork New New`, which doesn't make sense. It should also be noted that
+     making `New` fail gracefully when a `New` has already been executed would
+     need a global boolean flag, which is ugly.
+
+  3. checking that the preconditions hold in all interleavings
+    + pulse paper says that's what they do
+    + what qsm does
+    + if states diverge, we can generate:
+
+  4. ensure data dependencies hold
+     "constrained only by the data dependencies between them (which arise from
+     symbolic variables, bound in one command, being used in a later one)."
+
+       + needs atomic counter in the [fork] case? probably not if the env
+         extension happens outside of mapConcurrently?
+
+       + it doesn't matter which of the possible interleavings we use:
+         1. if we add a ref in one of the forks, then
+
+       + being in scope (the env) isn't the same as being in the model
+         - in scope means that we've created the concrete ref and know how to translate from symbolic commands
+         - being in the model means we can generate new commands using it
+         - references are montonically added to env, but might be removed from model
+
+    ```
+ParallelCommands
+      { parPrefix   =
+          [ Spawn ]
+      , parSuffixes =
+          [ Two
+              [ Register "c" (Var 0) ]
+              [ Unregister "c" ]
+          , Two
+              [ Register "a" (Var 0) ] []
+          ]
+      }
+
+    ====>
+
+      , parSuffixes =
+          ( [ Register "c" (Var 0) ]
+          , [ Unregister "c"; Register "a" (Var 0) ]
+          )
+    ```
+
 
 * shrinking can be improved, see qsm
 

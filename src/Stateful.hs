@@ -17,6 +17,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap as IntMap
 import Data.Foldable
 import Data.Kind
+import Data.Coerce
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Void
@@ -149,21 +150,28 @@ instance StateModel state => Arbitrary (Commands state) where
             ]
 
   shrink :: Commands state -> [Commands state]
-  shrink (Commands cmds0)
-    = filter (not . null . unCommands)
-    $ map (Commands . prunedCommands . prune initialState Set.empty . map fst)
-          (shrinkList shrinker (snd (withStates initialState cmds0)))
+  shrink = pruneShrinks . possibleShrinks
     where
-      shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
-
-      prune :: StateModel state
-            => state -> Set (Var (Reference state))
-            -> [Command state (Var (Reference state))]
-            -> Pruned state
-      prune s0 vars0 = go s0 vars0 []
+      possibleShrinks :: Commands state -> [Commands state]
+      possibleShrinks = map (Commands . map fst) . shrinkList shrinker
+                      . withStates initialState . unCommands
         where
-          go s vars acc [] = Pruned s vars (reverse acc)
-          go s vars acc (cmd : cmds)
+          shrinker (cmd, s) = [ (cmd', s) | cmd' <- shrinkCommand s cmd ]
+
+          withStates :: StateModel state
+                     => state -> [Command state (Var (Reference state))]
+                     -> [(Command state (Var (Reference state)), state)]
+          withStates s0 = go s0 []
+            where
+              go _s acc []           = reverse acc
+              go  s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
+
+      pruneShrinks :: [Commands state] -> [Commands state]
+      pruneShrinks = coerce . filter (not . null)
+                   . map (go initialState Set.empty [] . unCommands)
+        where
+          go _s _vars acc [] = reverse acc
+          go  s  vars acc (cmd : cmds)
             | not (scopeCheck vars cmd) = go s vars acc cmds
             | otherwise = case runFake cmd s of
                 Left _preconditionFailure -> go s vars acc cmds
@@ -174,21 +182,7 @@ instance StateModel state => Arbitrary (Commands state) where
                   in
                     go s' vars' (cmd : acc) cmds
 
-data Pruned state = Pruned
-  { prunedState    :: state
-  , prunedScope    :: Set (Var (Reference state))
-  , prunedCommands :: [Command state (Var (Reference state))]
-  }
-
-withStates :: StateModel state
-           => state -> [Command state (Var (Reference state))]
-           -> (state, [(Command state (Var (Reference state)), state)])
-withStates s0 = go s0 []
-  where
-    go s acc []           = (s, reverse acc)
-    go s acc (cmd : cmds) = go (nextState s cmd) ((cmd, s) : acc) cmds
-
-scopeCheck :: StateModel state
+scopeCheck :: Foldable (Command state)
            => Set (Var a) -> Command state (Var a) -> Bool
 scopeCheck varsInScope cmd = usedVars `Set.isSubsetOf` varsInScope
   where
@@ -251,6 +245,9 @@ lookupEnv (Env im) (Var i) = im IntMap.! i
 
 extendEnv :: Env state -> [(Int, Reference state)] -> Env state
 extendEnv (Env im) refs = Env (im `IntMap.union` IntMap.fromList refs)
+
+-- extendEnv' :: Env state -> [(Var (Reference state), Reference state)] -> Env state
+-- extendEnv' (Env im) env' = Env (im `IntMap.union` IntMap.fromList (map (\(Var i, ref) -> (i, ref)) refs))
 
 combineEnvs :: [Env state] -> Env state
 combineEnvs = Env . IntMap.unions . map unEnv

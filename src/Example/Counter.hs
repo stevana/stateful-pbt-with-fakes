@@ -45,7 +45,7 @@ reset = writeIORef gLOBAL_COUNTER 0
 ------------------------------------------------------------------------
 
 newtype Counter = Counter Int
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance StateModel Counter where
 

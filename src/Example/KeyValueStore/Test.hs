@@ -1,18 +1,19 @@
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Example.KeyValueStore.Test where
 
 import Control.Monad
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Coerce
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
-import Stateful
-import Parallel
 import Example.KeyValueStore.Real
+import Parallel
+import Stateful
 
 ------------------------------------------------------------------------
 
@@ -20,7 +21,7 @@ data State = State
   { initialised :: Bool
   , store :: Map Key Int
   }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance StateModel State where
 
@@ -70,7 +71,6 @@ instance StateModel State where
 
 instance ParallelModel State where
   runCommandMonad _ = id
-  disjointStates s1 s2 = initialised s1 == initialised s2 && Map.intersection (store s1) (store s2) == Map.empty
 
 prop_keyValueStore :: Commands State -> Property
 prop_keyValueStore cmds = monadicIO $ do
@@ -83,12 +83,10 @@ prop_parallelKeyValueStore cmds = monadicIO $ do
   replicateM_ 10 (runParallelCommands cmds)
   assert True
 
--- allDistinct :: Eq a => [a] -> Bool
--- allDistinct xs = and [ x /= y | (x, y) <- pairwise xs ]
-
 concWrites :: ParallelCommands State -> [Int]
-concWrites (ParallelCommands forks) = map disjointWrites' forks
+concWrites (ParallelCommands forks) = map disjointWrites' (coerce forks)
 
+  -- XXX: clean up
 disjointWrites' :: [Command State (Var (Reference State))] -> Int
 disjointWrites' = go . filter isWrite
   where

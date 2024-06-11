@@ -26,7 +26,7 @@ data RegState = RegState
   , regs   :: [(String, Var (ThreadId))]
   , killed :: [Var ThreadId]
   }
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 instance StateModel RegState where
 
