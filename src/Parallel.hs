@@ -1,18 +1,21 @@
-{-# LANGUAGE DeriveFoldable #-} {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Parallel where
 
-import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception (SomeException, displayException, try)
 import Control.Monad.IO.Class
+import Data.Coerce
 import Data.Containers.ListUtils (nubOrd)
 import Data.Foldable
 import Data.IORef
@@ -23,7 +26,6 @@ import qualified Data.Set as Set
 import Data.Tree
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
-import Data.Coerce
 
 import Stateful
 
@@ -67,8 +69,8 @@ deriving stock instance
 deriving stock instance
   Eq (Command state (Var (Reference state))) => Eq (Fork state)
 
-parallelCommands :: ParallelCommands state -> [[Command state (Var (Reference state))]]
-parallelCommands = coerce
+parallelCommands :: forall state. ParallelCommands state -> [Command state (Var (Reference state))]
+parallelCommands = concat . coerce @_ @[[Command state (Var (Reference state))]]
 
 instance ParallelModel state => Arbitrary (ParallelCommands state) where
 
@@ -98,6 +100,7 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
 
   -- TODO: Improve by: moving commands from forks into non forks and moving
   -- forks after non forks.
+  -- start snippet parallel-shrink
   shrink :: ParallelCommands state -> [ParallelCommands state]
   shrink = pruneShrinks . possibleShrinks
     where
@@ -146,7 +149,9 @@ instance ParallelModel state => Arbitrary (ParallelCommands state) where
               error "getReturnedVars: impossible, parallelSafe checks that all preconditions hold"
             Right (_s', resp) ->
               getReturnedVars s (vars `Set.union` Set.fromList (toList resp)) cmds
+  -- end snippet parallel-shrink
 
+-- start snippet parallelSafe
 parallelSafe :: ParallelModel state => [state] -> Fork state -> Bool
 parallelSafe ss (Fork cmds0) = and
   [ preconditionsHold s cmds | s <- toList ss, cmds <- permutations cmds0 ]
@@ -157,10 +162,13 @@ parallelSafe ss (Fork cmds0) = and
         go  s (cmd : cmds)
           | precondition s cmd = go (nextState s cmd) cmds
           | otherwise          = False
+-- end snippet parallelSafe
 
+-- start snippet nextStates
 nextStates :: (StateModel state, Ord state)
            => [state] -> [Command state (Var (Reference state))] -> [state]
 nextStates ss cmds = nubOrd [ foldl' nextState s cmds | s <- ss ]
+-- end snippet nextStates
 
 ------------------------------------------------------------------------
 
@@ -178,9 +186,7 @@ deriving stock instance
 
 newtype Pid = Pid Int
   deriving stock (Eq, Ord, Show)
-
-toPid :: ThreadId -> Pid
-toPid tid = Pid (read (drop (length ("ThreadId " :: String)) (show tid)))
+  deriving newtype Enum
 
 data Op state = Op (Command state (Var (Reference state)))
                    (Response state (Reference state))
@@ -223,9 +229,8 @@ linearisable env = any' (go initialState)
     go :: state -> Tree (Op state) -> Bool
     go s (Node (Op cmd cresp) ts) =
       case runFake cmd s of
-        Left err ->
-          error $ "linearisable: impossible, all precondtions are satisifed during generation\ncmd = " ++
-                  show cmd ++ "\ns = " ++ show s ++ "\nerr = " ++ show err
+        Left _preconditionFailure ->
+          error "linearisable: impossible, all precondtions are satisifed during generation"
         Right (s', resp) ->
           cresp == fmap (lookupEnv env) resp && any' (go s') ts
 
@@ -254,33 +259,32 @@ extendEnvParallel env c refs = do
 
 runParallelCommands :: forall state. ParallelModel state
                     => ParallelCommands state -> PropertyM IO ()
-runParallelCommands (ParallelCommands cmdss0) = do
-  forM_ (concat (map unFork cmdss0)) $ \cmd -> do
+runParallelCommands cmds0@(ParallelCommands forks0) = do
+  forM_ (parallelCommands cmds0) $ \cmd -> do
     let name = commandName cmd
     monitor (tabulate "Commands" [name] . classify True name)
-  monitor (tabulate "Concurrency" (map (show . length . unFork) cmdss0))
+  monitor (tabulate "Concurrency" (map (show . length . unFork) forks0))
   evs <- liftIO newTQueueIO
-  c <- liftIO newAtomicCounter
-  env <- go evs c emptyEnv (coerce cmdss0)
+  c   <- liftIO newAtomicCounter
+  env <- runForks evs c emptyEnv forks0
   hist <- History <$> liftIO (atomically (flushTQueue evs))
   monitor (counterexample (show hist))
   assert (linearisable env (interleavings hist))
   where
-    go _evs _c env [] = return env
-    go  evs  c env (cmds : cmdss) = do
+    runForks _evs _c env [] = return env
+    runForks  evs  c env (Fork cmds : forks) = do
       envs <- liftIO $
-        mapConcurrently (runParallelReal evs c env) cmds
+        mapConcurrently (runParallelReal evs c env) (zip [Pid 0..] cmds)
       let env' = combineEnvs (env : envs)
-      go evs c env' cmdss
+      runForks evs c env' forks
 
 runParallelReal :: forall state. ParallelModel state
                 => TQueue (Event state)
                 -> AtomicCounter
                 -> Env state
-                -> Command state (Var (Reference state))
+                -> (Pid, Command state (Var (Reference state)))
                 -> IO (Env state)
-runParallelReal evs c env cmd = do
-  pid <- toPid <$> liftIO myThreadId
+runParallelReal evs c env (pid, cmd) = do
   liftIO (atomically (writeTQueue evs (Invoke pid cmd)))
   eResp <- try (runCommandMonad (Proxy :: Proxy state) (runReal (fmap (lookupEnv env) cmd)))
   case eResp of
