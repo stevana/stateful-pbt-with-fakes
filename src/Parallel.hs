@@ -255,9 +255,9 @@ extendEnvParallel env c refs = do
 runParallelCommands :: forall state. ParallelModel state
                     => ParallelCommands state -> PropertyM IO ()
 runParallelCommands (ParallelCommands cmdss0) = do
-  forM_ (concat (map unFork cmdss0)) $ \cmd ->
-    let name = commandName cmd in
-      monitor (tabulate "Commands" [name] . classify True name)
+  forM_ (concat (map unFork cmdss0)) $ \cmd -> do
+    let name = commandName cmd
+    monitor (tabulate "Commands" [name] . classify True name)
   monitor (tabulate "Concurrency" (map (show . length . unFork) cmdss0))
   evs <- liftIO newTQueueIO
   c <- liftIO newAtomicCounter
@@ -289,7 +289,10 @@ runParallelReal evs c env cmd = do
     Right resp -> do
       -- NOTE: It's important that we extend the environment before writing `Ok`
       -- to the history, otherwise we might get scope issues.
-      -- XXX: move out
+
+      -- XXX: Move outside of mapConcurrently? How do we assign the right `Var`
+      -- with each `Reference`? Perhaps this would be easier if we had a prefix
+      -- and N suffixes?
       env' <- extendEnvParallel env c (toList resp)
       liftIO (atomically (writeTQueue evs (Ok pid resp)))
       return env'

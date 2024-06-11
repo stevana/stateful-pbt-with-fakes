@@ -7,7 +7,6 @@ module Example.KeyValueStore.Test where
 import Control.Monad
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Coerce
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
@@ -79,27 +78,20 @@ prop_keyValueStore cmds = monadicIO $ do
 
 prop_parallelKeyValueStore :: ParallelCommands State -> Property
 prop_parallelKeyValueStore cmds = monadicIO $ do
-  monitor (tabulate "Disjoint concurrent writes" (map show (concWrites cmds)))
+  monitor (tabulate "Disjoint concurrent writes" (map show (tagWrites cmds)))
   replicateM_ 10 (runParallelCommands cmds)
   assert True
 
-concWrites :: ParallelCommands State -> [Int]
-concWrites (ParallelCommands forks) = map disjointWrites' (coerce forks)
+data Tag = NoConcurrentWrites | TwoWritesSameKey | TwoWritesDifferentKeys | ThreeWrites
+  deriving Show
 
-  -- XXX: clean up
-disjointWrites' :: [Command State (Var (Reference State))] -> Int
-disjointWrites' = go . filter isWrite
+tagWrites :: ParallelCommands State -> [Tag]
+tagWrites = map (go . filter isWrite . unFork) . unParallelCommands
   where
     isWrite Write {} = True
     isWrite _ = False
 
-    writeKey   (Write _ key _value) = key
-    writeValue (Write _ _key value) = value
-
-    go [] = 0
-    go [_] = 0
-    -- go writes = map writeKey writes
-    go [Write _ key value, Write _ key' value'] = if key /= key' && value /= value' then 2 else 0
-    go [Write _ key value, Write _ key' value', Write _ key'' value''] =
-      if key /= key' && key /= key'' && key' /= key'' && value /= value' && value /= value'' && value' /= value'' then 3 else 0
-    go _ = error "impossible"
+    go [Write _ key _, Write _ key' _] | key == key' = TwoWritesSameKey
+                                       | otherwise   = TwoWritesDifferentKeys
+    go [Write {}, Write {}, Write {}]                = ThreeWrites
+    go _ = NoConcurrentWrites
