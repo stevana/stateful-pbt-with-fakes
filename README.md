@@ -2161,7 +2161,7 @@ linearisable env = any' (go initialState)
 #### Example: parallel counter
 
 This is the only new code we need to add to enable parallel testing of
-our `Counter` example\[^4\] from before:
+our `Counter` example[^4] from before:
 
 ``` haskell
 instance ParallelModel Counter where
@@ -2469,3 +2469,9 @@ opportunities.
     version of a fuzzer (without coverage guidance). For more on this
     and how to add coverage guidance, see [*Coverage guided, property
     based testing*](https://dl.acm.org/doi/10.1145/3360607) (2019).
+
+[^4]: The parallel counter example is very similar to the ticket
+    dispenser example that appears in [*Testing the hard stuff and
+    staying
+    sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
+    (2014).

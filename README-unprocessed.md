@@ -2025,7 +2025,7 @@ formal proof part, we should cherish such eduction opportunities.
     guidance, see [*Coverage guided, property based
     testing*](https://dl.acm.org/doi/10.1145/3360607) (2019).
 
-[^3]: The parallel counter example is very similar to the ticket dispenser
+[^4]: The parallel counter example is very similar to the ticket dispenser
     example that appears in [*Testing the hard stuff and staying
     sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
     (2014).
