@@ -1809,18 +1809,23 @@ newtype ParallelCommands state = ParallelCommands [Fork state]
 newtype Fork state = Fork [Command state (Var (Reference state))]
 ```
 
-The idea is that the inner list of commands gets executed in parallel,
-this list will only be between one and three commands long. After each
-such single, double or triple threaded exeuction there might more, this
-is what the outer list captures.
+The idea is that the commands inside `Fork`s get executed in parallel,
+this list will only be between one and three commands long, i.e.
+capturing single, double or triple threaded exeuction. The amount of
+`Fork`s themselves vary with the size of the test case, just like when
+we were doing the sequential testing.
+
+Depending on the order in which the commands in the `Fork`s get
+executed, we can potententially get different models. For example
+`Fork [Write "a" "foo", Write "a" "bar"]`, depending on which branch of
+the `Fork` gets executed first we might end up with either `"foo"` or
+`"bar"` being written to `"a"`.
+
+Because of this, we have generalised generation and shrinking to work on
+a set of states rather than just a single state:
 
 ``` haskell
 class (StateModel state, Ord state) => ParallelModel state where
-
-  -- If another command monad is used we need to provide a way run it inside the
-  -- IO monad. This is only needed for parallel testing, because IO is the only
-  -- monad we can execute on different threads.
-  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 
   generateCommandParallel :: [state] -> Gen (Command state (Var (Reference state)))
   generateCommandParallel ss = do
@@ -1832,7 +1837,14 @@ class (StateModel state, Ord state) => ParallelModel state where
   shrinkCommandParallel ss cmd = shrinkCommand (maximum ss) cmd
 ```
 
-We can write a generator
+Notice that the default implementation for generation, which should be
+good enough for most examples, picks an arbitrary state and reuses the
+generation function from the sequential case. Similar shrinking picks
+the biggest state (determined by the `Ord` instance) as the default
+implementation. The user is able to override these defaults, in case
+generation or shrinking depends on some more specific state.
+
+We can now write a generator for parallel programs.
 
 ``` haskell
   arbitrary :: Gen (ParallelCommands state)
@@ -1858,66 +1870,59 @@ We can write a generator
             ]
 ```
 
-The problem with preconditions in the parallel case
+Where `nextStates` gives all potential next states and is defined as
+follows.
 
-1.  in the sequential case a precondition is a contract that needs to be
-    fulfilled by the client before the command is issued. In the
-    parallel case there are multiple clients, so it could be the case
-    that one client unknowingly breaks another clients precondition.
+``` haskell
+nextStates :: (StateModel state, Ord state)
+           => [state] -> [Command state (Var (Reference state))] -> [state]
+nextStates ss cmds = nubOrd [ foldl' nextState s cmds | s <- ss ]
+```
 
-    E.g. `Fork (Rename "x" "y") (Remove "x")`, where the precondition
-    for both commands is that "x" exists. If `Rename` gets executed
-    first then it would break `Remove`'s precondition and vice versa.
+The other helper function that we need for generation is `parallelSafe`,
+which requires a bit of background.
 
-2.  Drop all preconditions in the parallel case and make all commands be
-    able to fail gracefully instead of crashing, e.g.
-    `Remove_ (Either Doesn'tExist ())`. The problem with this approach
-    is that examples such as the ticket dispenser have initialisation
-    commands such as `New` which create a ticket dispenser reference
-    upon which the later commands depend on, so without preconditions
-    forbidding more than one `New` we can end up generating:
-    `Fork New New`, which doesn't make sense. It should also be noted
-    that making `New` fail gracefully when a `New` has already been
-    executed would need a global boolean flag, which is ugly.
+In the sequential case a precondition is a contract that needs to be
+fulfilled by the client before the command is issued. In the parallel
+case there are multiple clients, so it could be the case that one client
+unknowingly breaks another clients precondition.
 
-3.  checking that the preconditions hold in all interleavings + pulse
-    paper says that's what they do + what qsm does + if states diverge,
-    we can generate:
+E.g. `Fork [Write "a" "foo", Delete "a"]`, where the precondition for
+both commands is that `"a"` exists. If `Delete` gets executed first then
+it would break `Write`'s precondition.
 
-4.  ensure data dependencies hold "constrained only by the data
-    dependencies between them (which arise from symbolic variables,
-    bound in one command, being used in a later one)."
+One idea might be to drop all preconditions in the parallel case and
+make all commands be able to fail gracefully instead of crashing, e.g.
+`Write_ (Either DoesntExist ())`.
 
-    - needs atomic counter in the \[fork\] case? probably not if the env
-      extension happens outside of mapConcurrently?
+XXX: make counter or queue example into one of such examples:
 
-    - it doesn't matter which of the possible interleavings we use:
+The problem with this approach is that examples such as the ticket
+dispenser have initialisation commands such as `New` which create a
+ticket dispenser reference upon which the later commands depend on, so
+without preconditions forbidding more than one `New` we can end up
+generating: `Fork New New`, which doesn't make sense. It should also be
+noted that making `New` fail gracefully when a `New` has already been
+executed would need a global boolean flag, which is ugly.
 
-      1.  if we add a ref in one of the forks, then
+The solution to the preconditon problem is to check that they hold in
+all possible interleavings of a `Fork`, which is what `parallelSafe`
+does:
 
-    - being in scope (the env) isn't the same as being in the model
+``` haskell
+parallelSafe :: ParallelModel state => [state] -> Fork state -> Bool
+parallelSafe ss (Fork cmds0) = and
+  [ preconditionsHold s cmds | s <- toList ss, cmds <- permutations cmds0 ]
+  where
+    preconditionsHold s0 = all (go s0) . permutations
+      where
+        go _s [] = True
+        go  s (cmd : cmds)
+          | precondition s cmd = go (nextState s cmd) cmds
+          | otherwise          = False
+```
 
-      - in scope means that we've created the concrete ref and know how
-        to translate from symbolic commands
-      - being in the model means we can generate new commands using it
-      - references are montonically added to env, but might be removed
-        from model
-
-<!-- -->
-
-    ```
-
-ParallelCommands { parPrefix = \[ Spawn \] , parSuffixes = \[ Two \[
-Register "c" (Var 0) \] \[ Unregister "c" \] , Two \[ Register "a" (Var
-0) \] \[\] \] }
-
-    ====>
-
-      , parSuffixes =
-          ( [ Register "c" (Var 0) ]
-          , [ Unregister "c"; Register "a" (Var 0) ]
-          )
-    ```
+While shrinking we also use `parallelSafe`:
 
 ``` haskell
   shrink :: ParallelCommands state -> [ParallelCommands state]
@@ -1970,7 +1975,20 @@ Register "c" (Var 0) \] \[ Unregister "c" \] , Two \[ Register "a" (Var
               getReturnedVars s (vars `Set.union` Set.fromList (toList resp)) cmds
 ```
 
-- shrinking can be improved, see qsm
+In addition we also check that shrinking doesn't create any scoping
+issues, i.e. if we remove a command which creates a symbolic variable we
+also need to remove any fork that contains a command which uses said
+symbolic variable.
+
+Another option is to skip the scope checking and instead require the
+user to explicitly require preconditions which ensure the scope.
+
+We can also improve the shrinking by moving commands outside of forks,
+e.g. `[Fork [a, b]] ==> [Fork [a], Fork [b]]`, thus making the program
+more sequential, and moving forks after smaller forks, e.g.
+`[Fork [a, b], Fork [c]] ==> [Fork [c], Fork [a, b]]`, thus making for
+less potential concurrent interleavings. For simplicity, we've chosen
+not to implemented those here.
 
 ##### Linearisability checking
 
@@ -2046,30 +2064,16 @@ linearisable env = any' (go initialState)
 
 ##### Parallel running
 
-XXX: extend StateModel class:
+One final difference in the parallel case is that because of the use of
+threads to achieve parallel execution, and the fact we can only spawn
+threads of things of type `IO`, we also need to be able to interpret our
+`CommandMonad` into `IO`, which is what `runCommandMonad` does.
 
 ``` haskell
   -- If another command monad is used we need to provide a way run it inside the
   -- IO monad. This is only needed for parallel testing, because IO is the only
   -- monad we can execute on different threads.
   runCommandMonad :: proxy state -> CommandMonad state a -> IO a
-```
-
-``` haskell
-newtype AtomicCounter = AtomicCounter (IORef Int)
-
-newAtomicCounter :: IO AtomicCounter
-newAtomicCounter = AtomicCounter <$> newIORef 0
-
--- Returns old value.
-incrAtomicCounter :: AtomicCounter -> Int -> IO Int
-incrAtomicCounter (AtomicCounter ioRef) n =
-  atomicModifyIORef' ioRef (\old -> (old + n, old))
-
-extendEnvParallel :: Env state -> AtomicCounter -> [Reference state] -> IO (Env state)
-extendEnvParallel env c refs = do
-  i <- incrAtomicCounter c (length refs)
-  return (extendEnv env (zip [i..] refs))
 ```
 
 ``` haskell
@@ -2155,7 +2159,8 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 
 #### Example: key-value store
 
-- disjoint state + coverage to confirm
+- change so it has a create command which creates a new ref?
+- coverage to confirm
 
 ### Integration testing with contract tested fakes
 

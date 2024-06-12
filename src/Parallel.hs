@@ -34,11 +34,6 @@ import Stateful
 -- start snippet ParallelModel
 class (StateModel state, Ord state) => ParallelModel state where
 
-  -- If another command monad is used we need to provide a way run it inside the
-  -- IO monad. This is only needed for parallel testing, because IO is the only
-  -- monad we can execute on different threads.
-  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
-
   generateCommandParallel :: [state] -> Gen (Command state (Var (Reference state)))
   generateCommandParallel ss = do
     s <- elements ss
@@ -48,6 +43,13 @@ class (StateModel state, Ord state) => ParallelModel state where
                         -> [Command state (Var (Reference state))]
   shrinkCommandParallel ss cmd = shrinkCommand (maximum ss) cmd
 -- end snippet ParallelModel
+
+-- start snippet runCommandMonad
+  -- If another command monad is used we need to provide a way run it inside the
+  -- IO monad. This is only needed for parallel testing, because IO is the only
+  -- monad we can execute on different threads.
+  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
+-- end snippet runCommandMonad
 
 -- start snippet ParallelCommands
 newtype ParallelCommands state = ParallelCommands [Fork state]
