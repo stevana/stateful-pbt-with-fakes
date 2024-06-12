@@ -1,31 +1,31 @@
 # The sad state of property-based testing libraries
 
-*Work in progress, please don’t share, but do get involved!*
+*Work in progress, please don't share, but do get involved!*
 
 Property-based testing is a rare example of academic research that has
-made it to the mainstream in less than 30 years. Under the slogan “don’t
-write tests, generate them” property-based testing has gained support
+made it to the mainstream in less than 30 years. Under the slogan "don't
+write tests, generate them" property-based testing has gained support
 from a diverse group of programming language communities. In fact, the
 Wikipedia page of the original property-basted testing Haskell library,
 [QuickCheck](https://en.wikipedia.org/wiki/QuickCheck), lists 57
 reimplementations in other languages.
 
-In this post I’d like to survey the most popular property-based testing
+In this post I'd like to survey the most popular property-based testing
 implementations and compare them with what used to be the
 state-of-the-art fifteen years ago (2009). As the title already gives
 away, most of the libraries do not offer their users the most advanced
-property-based testing features. In order to best explain what’s missing
+property-based testing features. In order to best explain what's missing
 and why I think we ended up in this situation, let me start by telling
 the brief history of property-based testing.
 
 ## The history of property-based testing
 
-In Gothenburg, Sweden’s second most populated city, there’s a university
+In Gothenburg, Sweden's second most populated city, there's a university
 called Chalmers. At the computer science department of Chalmers there
 are several research groups, two of which are particularly relevant to
-our story – the *Functional Programming* group and *Programming Logic*
-group. I’ll let you guess what the former group’s main interest is. The
-latter group’s mostly conserned with a branch of functional programming
+our story -- the *Functional Programming* group and *Programming Logic*
+group. I'll let you guess what the former group's main interest is. The
+latter group's mostly conserned with a branch of functional programming
 where the type system is sufficiently expressive that it allows for
 formal specifications of programs, sometimes called dependently typed
 programming or type theory. Agda is an example of a Haskell-like
@@ -36,18 +36,18 @@ groups or at least visit each others research seminars from time to
 time.
 
 John Hughes is a long-time member of the Functional Programming group,
-who’s also well aware of the research on dependently typed programming
+who's also well aware of the research on dependently typed programming
 going on in the Programming Logic group. One day in the late nineties,
 after having worked hard on finishing something important on time, John
-found himself having a week “off”. So, just for fun, he started
+found himself having a week "off". So, just for fun, he started
 experimenting with the idea of testing if a program respects a formal
 specification.
 
 Typically in dependently typed programming you use the types to write
 the specification and then the program that implements that type is the
-formal proof that the program is correct. For example, let’s say you’ve
+formal proof that the program is correct. For example, let's say you've
 implemented a list sorting function, the specification typically then is
-that the output of the sorting function is ordered, i.e. for any index
+that the output of the sorting function is ordered, i.e. for any index
 $i$ in your output list the element at that index must be smaller or
 equal to the element at index $i + 1$. Formally proving that a program
 is correct with respect to a specification is often as much work as
@@ -65,21 +65,21 @@ this idea excited John.
 
 While John was working on this idea, Koen Claessen, another member of
 the Functional Programing group, [stuck his
-head](https://youtu.be/x4BNj7mVTkw?t=289) into John’s office and asked
+head](https://youtu.be/x4BNj7mVTkw?t=289) into John's office and asked
 what he was doing. Koen got excited as well and came back the next day
-with his improved version of John’s code. There was some things that
-Koen hadn’t thought about, so John iterated on his code and so it went
+with his improved version of John's code. There was some things that
+Koen hadn't thought about, so John iterated on his code and so it went
 back and forth for a week until the first implementation of
 property-based testing was written and not long afterwards they publised
 the paper [*QuickCheck: A Lightweight Tool for Random Testing of Haskell
 Programs*](https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf)
-(ICFP 2000). I think it’s worth stressing the *lightweight tool* part
-from the paper’s title, the complete source code for the [first
+(ICFP 2000). I think it's worth stressing the *lightweight tool* part
+from the paper's title, the complete source code for the [first
 version](https://github.com/Rewbert/quickcheck-v1) of the library is
-included in the appendix of the paper and it’s about 300 lines of code.
+included in the appendix of the paper and it's about 300 lines of code.
 
 Haskell and dependently typed programming languages, like Agda, are pure
-functional programming languages, meaning that it’s possible at the
+functional programming languages, meaning that it's possible at the
 type-level to distinguish whether a function has side-effects or not.
 Proofs about functions in Agda, and similar languages, are almost always
 only dealing with pure functions. Probably as a result of this, the
@@ -87,7 +87,7 @@ first version of QuickCheck can only test pure functions. This
 shortcoming was rectified in the follow up paper [*Testing monadic code
 with
 QuickCheck*](https://www.cse.chalmers.se/~rjmh/Papers/QuickCheckST.ps)
-(2002) by the same authors. It’s an important extension as it allows us
+(2002) by the same authors. It's an important extension as it allows us
 to reason about functions that use mutable state, file I/O and
 networking, etc. It also lays the foundation for being able to test
 concurrent programs, as we shall see below.
@@ -105,8 +105,8 @@ surprisingly, Koen was never involved in the company).
 
 The first project at Ericsson that Quviq helped out testing was written
 in Erlang. Unlike Haskell, Erlang is not a pure functional programming
-language and on top of that there’s concurrency everywhere. So even the
-second, monadic, version of QuickCheck didn’t turn out to be ergonomic
+language and on top of that there's concurrency everywhere. So even the
+second, monadic, version of QuickCheck didn't turn out to be ergonomic
 enough for the job. This is what motivated the closed source Quviq
 QuickCheck version written in Erlang, first mentioned in the paper
 [*Testing telecoms software with Quviq
@@ -119,17 +119,17 @@ see, are still not found in many open source versions are:
 2.  *Parallel* testing with race condition detection by reusing the
     sequential state machine model.
 
-We shall describe how these features work in detail later. For now let’s
+We shall describe how these features work in detail later. For now let's
 just note that *stateful* testing in its current form was first
 mentioned in [*QuickCheck testing for fun and
 profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
 (2007). This paper also mentions that it took John four iterations to
 get the stateful testing design right, so while the 2006 paper already
-does mention stateful testing it’s likely containing one of those
+does mention stateful testing it's likely containing one of those
 earlier iteration of it.
 
 While the 2007 paper also mentiones *parallel* testing via traces and
-interleavings, it’s vague on details. It’s only later in [*Finding Race
+interleavings, it's vague on details. It's only later in [*Finding Race
 Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (ICFP 2009) that parallel testing is described in detail including a
@@ -137,12 +137,12 @@ reference to [*Linearizability: a correctness condition for concurrent
 objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) by
 Herlihy and Wing (1990) which is the main technique behind it.
 
-I’d like to stress that no Quviq QuickCheck library code is ever shared
+I'd like to stress that no Quviq QuickCheck library code is ever shared
 in any of these papers, they only contain the library APIs (which are
 public) and test examples implemented using said APIs.
 
 After that most papers are experience reports of applying Quviq
-QuickCheck at different companies, e.g. *Testing A Database for Race
+QuickCheck at different companies, e.g. *Testing A Database for Race
 Conditions with QuickCheck* (2011), [*Testing the hard stuff and staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014), *Testing AUTOSAR software with QuickCheck* (2015), *Mysteries of
@@ -150,21 +150,21 @@ Dropbox: Property-Based Testing of a Distributed Synchronization
 Service* (2016).
 
 Sometimes various minor extenions to stateful and parallel testings are
-needed in order to test some particular piece of software, e.g. C FFI
+needed in order to test some particular piece of software, e.g. C FFI
 bindings in the case of AUTOSAR or eventual consistency in the case of
 Dropbox, but by and large the stateful and parallel testing features
 remain the same.
 
 ## A survey of property-based testing libraries
 
-As we’ve seen above, the current state-of-the-art when it comes to
+As we've seen above, the current state-of-the-art when it comes to
 property-based testing is *stateful* testing via a state machine model
 and reusing the same sequential state machine model combined with
 linearisability to achieve *parallel* testing.
 
-Next let’s survey the most commonly used property-based testing
+Next let's survey the most commonly used property-based testing
 libraries to see how well supported these two testing features are. Let
-me be clear up front that I’ve not used all of these libraries. My
+me be clear up front that I've not used all of these libraries. My
 understanding comes from reading the documentation, issue tracker and
 sometimes source code.
 
@@ -178,23 +178,23 @@ mistake or an important omission.
 |:-------------------------|:-----------|:--------:|:--------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Eris                     | PHP        |    ☐     |    ☐     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | FsCheck                  | F#         |    ☒     |    ☐     | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Gopter                   | Go         |    ☒     |    ☐     | The README says “No parallel commands … yet?” and there’s an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Gopter                   | Go         |    ☒     |    ☐     | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Hedgehog                 | Haskell    |    ☒     |    ☒     | Has parallel support, but the implementation has [issues](https://github.com/hedgehogqa/haskell-hedgehog/issues/104).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Hypothesis               | Python     |    ☒     |    ☐     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | PropEr                   | Erlang     |    ☒     |    ☒     | First open source library to support both?                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| QuickCheck               | Haskell    |    ☐     |    ☐     | There’s an open [issue](https://github.com/nick8325/quickcheck/issues/139) to add stateful testing since 2016.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| QuickTheories            | Java       |    ☒     |    ☐     | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there’s also some parallel testing, but it’s inefficient and restrictive compared to QuviQ’s Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): “Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less.” |
+| QuickCheck               | Haskell    |    ☐     |    ☐     | There's an open [issue](https://github.com/nick8325/quickcheck/issues/139) to add stateful testing since 2016.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| QuickTheories            | Java       |    ☒     |    ☐     | Has [experimental](https://github.com/quicktheories/QuickTheories/issues/42) for stateful testing, there's also some parallel testing, but it's inefficient and restrictive compared to QuviQ's Erlang version of QuickCheck. From the [source code](https://github.com/quicktheories/QuickTheories/blob/a963eded0604ab9fe1950611a64807851d790c1c/core/src/main/java/org/quicktheories/core/stateful/Parallel.java#L35): "Supplied commands will first be run in sequence and compared against the model, then run concurrently. All possible valid end states of the system will be calculated, then the actual end state compared to this. As the number of possible end states increases rapidly with the number of commands, command lists should usually be constrained to 10 or less." |
 | Rapid                    | Go         |    ☒     |    ☐     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| RapidCheck               | C++        |    ☒     |    ☐     | There’s an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ScalaCheck               | Scala      |    ☒     |    ☐     | Has some support for parallel testing, but it’s limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| SwiftCheck               | Swift      |    ☐     |    ☐     | There’s an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| fast-check               | TypeScript |    ☒     |    ☐     | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it seems different from Quviq QuickCheck’s parallel testing. In particular it doesn’t seem to reuse the sequential state machine model nor use linearisability.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| jetCheck                 | Java       |    ☒     |    ☐     | From the source code “Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.”.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| jsverify                 | JavaScript |    ☐     |    ☐     | There’s an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| RapidCheck               | C++        |    ☒     |    ☐     | There's an open [issue](https://github.com/emil-e/rapidcheck/issues/47) to add parallel support from 2015.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ScalaCheck               | Scala      |    ☒     |    ☐     | Has some support for parallel testing, but it's limited as can be witnessed by the fact that the two [examples](https://github.com/typelevel/scalacheck/tree/19af6eb656ba759980664e29ec6ae3e063021685/examples) of testing LevelDB and Redis both are sequential (`threadCount = 1`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| SwiftCheck               | Swift      |    ☐     |    ☐     | There's an open [issue](https://github.com/typelift/SwiftCheck/issues/149) to add stateful testing from 2016.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| fast-check               | TypeScript |    ☒     |    ☐     | Has [some support](https://fast-check.dev/docs/advanced/race-conditions/) for race condition checking, but it seems different from Quviq QuickCheck's parallel testing. In particular it doesn't seem to reuse the sequential state machine model nor use linearisability.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| jetCheck                 | Java       |    ☒     |    ☐     | From the source code "Represents an action with potential side effects, for single-threaded property-based testing of stateful systems.".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| jsverify                 | JavaScript |    ☐     |    ☐     | There's an open [issue](https://github.com/jsverify/jsverify/issues/148) to add stateful testing from 2015.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | lua-quickcheck           | Lua        |    ☒     |    ☐     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| propcheck                | Elixir     |    ☒     |    ☐     | There’s an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| propcheck                | Elixir     |    ☒     |    ☐     | There's an open [issue](https://github.com/alfert/propcheck/issues/148) to add parallel testing from 2020.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | proptest                 | Rust       |    ☐     |    ☐     | See proptest-state-machine.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| proptest-state-machine   | Rust       |    ☒     |    ☐     | Documentation says “Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.”.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| proptest-state-machine   | Rust       |    ☒     |    ☐     | Documentation says "Currently, only sequential strategy is supported, but a concurrent strategy is planned to be added at later point.".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | qcheck-stm               | OCaml      |    ☒     |    ☒     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | quickcheck               | Prolog     |    ☐     |    ☐     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | quickcheck               | Rust       |    ☐     |    ☐     | Issue to add stateful testing has been [closed](https://github.com/BurntSushi/quickcheck/issues/134).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -206,40 +206,40 @@ mistake or an important omission.
 
 ## Analysis
 
-By now I hope that I’ve managed to convince you that most property-based
+By now I hope that I've managed to convince you that most property-based
 testing libraries do not implement what used to be the state-of-the-art
 fifteen years ago.
 
 Many libraries lack stateful testing via state machines and most lack
 parallel testing support. Often users of the libraries have opened
 tickets asking for these features, but the tickets have stayed open for
-years without any progress. Furthermore it’s not clear to me whether all
+years without any progress. Furthermore it's not clear to me whether all
 libraries that support stateful testing can be generalised to parallel
-testing without a substantial redesign of their APIs. I don’t think
-there’s a single example of a library to which parallel testing was
+testing without a substantial redesign of their APIs. I don't think
+there's a single example of a library to which parallel testing was
 added later, rather than designed for from the start.
 
 ### Why are property-based testing libraries in such a sad state?
 
-Here are three reasons I’ve heard from John:
+Here are three reasons I've heard from John:
 
 1.  The stateful and parallel testing featurs are not as useful as
     testing pure functions. This is what John told me when I asked him
-    why these features haven’t taken off in the context of Haskell
+    why these features haven't taken off in the context of Haskell
     (BobKonf 2017);
 
 2.  The state machine models that one needs to write for the stateful
     and parallel testing require a different way of thinking compared to
-    normal testing. One can’t merely give these tools to new users
+    normal testing. One can't merely give these tools to new users
     without also giving them proper training, John said in an
     [interview](https://youtu.be/x4BNj7mVTkw?t=898);
 
-3.  Open source didn’t work, a closed source product and associated
+3.  Open source didn't work, a closed source product and associated
     services
     [helps](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
     adoption:
 
-    > “Thomas Arts and I have founded a start-up, Quviq AB, to develop
+    > "Thomas Arts and I have founded a start-up, Quviq AB, to develop
     > and market Quviq QuickCheck. Interestingly, this is the second
     > implementation of QuickCheck for Erlang. The first was presented
     > at the Erlang User Conference in 2003, and made available on the
@@ -257,17 +257,17 @@ Here are three reasons I’ve heard from John:
     > funding agencies to pay for all the work involved. In that light,
     > starting a company is a natural way for a researcher to make an
     > impact on industrial practice—and so far, at least, it seems to be
-    > succeeding.”
+    > succeeding."
 
-A cynic might argue that there’s a conflict of interest between doing
+A cynic might argue that there's a conflict of interest between doing
 research and education on one hand and running a company that sells
 licenses, training and consulting on the other.
 
-Let me be clear that I’ve the utmost respect for John, and I believe
+Let me be clear that I've the utmost respect for John, and I believe
 what he says to be true and I believe he acts with the best intentions.
-Having said that let me try to address John’s points.
+Having said that let me try to address John's points.
 
-#### Stateful and parallel testing isn’t as useful as pure testing
+#### Stateful and parallel testing isn't as useful as pure testing
 
 I think many people will agree that separating pure from side-effectful
 code is good practice in any programming language, and I do agree with
@@ -286,7 +286,7 @@ Regarding formal specification requiring a special way of thinking and
 therefor training, I believe this is a correct assessment. However I
 also believe that this is already true for property-based testing of
 pure functions. A non-trained user of pure property-based testing will
-likely test less interesting properties than someone who’s trained.
+likely test less interesting properties than someone who's trained.
 
 Given that John has written
 [papers](https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf)
@@ -295,13 +295,13 @@ topic of making property-based testing of pure functions more accessible
 to programmers, one might wonder why we cannot do the same for stateful
 and parallel testing?
 
-The experience reports, that we’ve mentioned above, usually contain some
+The experience reports, that we've mentioned above, usually contain some
 novelty (which warrents publishing a new paper) rather than general
 advice which can be done with the vanilla stateful and parallel testing
 features. Furthermore they require buying a Quviq license in order to
 reproduce the results, a show stopper for many people.
 
-I think it’s also worth stressing that stateful specifications are not
+I think it's also worth stressing that stateful specifications are not
 necessarily always more difficult than specifications for pure
 functions. For example, to model a key-value store one can get quite far
 with the model being a list of key-value pairs. In fact a simple model
@@ -312,7 +312,7 @@ running the property again on the fixed code a new 31 step
 counterexample was found within minutes. Turns out there was a bug in
 the background compaction process. The compaction process improves read
 performance and reclaims disk space, which is important for a key-value
-store, but interestingly it’s not explicitly part of the model. Joseph W
+store, but interestingly it's not explicitly part of the model. Joseph W
 Norton gave a
 [talk](https://htmlpreview.github.io/?https://raw.githubusercontent.com/strangeloop/lambdajam2013/master/slides/Norton-QuickCheck.html)
 at LambdaJam 2013 about it.
@@ -322,12 +322,12 @@ at LambdaJam 2013 about it.
 Regarding keeping the source closed helping with adoption, I think this
 is perhaps the most controversial point that John makes.
 
-If we try to see it from John’s perspective, how else would an academic
-get funding to work on tooling (which typically isn’t reconginised as
+If we try to see it from John's perspective, how else would an academic
+get funding to work on tooling (which typically isn't reconginised as
 doing research), or feedback from industry? Surely, one cannot expect
 research funding agencies to pay for this?
 
-On the other hand one could ask why there isn’t a requirement that
+On the other hand one could ask why there isn't a requirement that
 published research should be reproducable using open source tools (or at
 least tools that are freely available to the public and other
 researchers)?
@@ -339,40 +339,40 @@ impossible without a lot of reverse engineering work.
 I suppose one could argue that one could have built a business around an
 open source tool, only charging for the training and consulting, but
 given how broken open source is today, unless you are a big company
-(which takes more than it gives back), it’s definitely not clear that it
+(which takes more than it gives back), it's definitely not clear that it
 would have worked (and it was probably even worse back in 2006).
 
 Even if John is right and that keeping it closed source has helped
-adoption in industry, I think it’s by now fair to say it has not helped
+adoption in industry, I think it's by now fair to say it has not helped
 open source adoption.
 
-Or perhaps rather, it’s unlikely that a company that pays for a licence
+Or perhaps rather, it's unlikely that a company that pays for a licence
 in Erlang would then go and port the library in another language.
 
 ### What can we do about it?
 
-I think there’s at least two things worth trying.
+I think there's at least two things worth trying.
 
 1.  Provide a short open source implementation of stateful and parallel
     property-based testing, analogous to the original ~300LOC vanilla
     QuickCheck implementation.
 
-    Perhaps part of the original QuickCheck library’s success in
+    Perhaps part of the original QuickCheck library's success in
     spreading to so many other languages can be attributed to the fact
     that its small implementation and that it is part of the original
     paper?
 
-2.  Try to make the formal specification part easier, so that we don’t
+2.  Try to make the formal specification part easier, so that we don't
     need to train developers (as much).
 
     Perhaps we can avoid state machines as basis for specifications and
     instead reuse concepts that programmers are already familiar with
-    from their current testing activities, e.g. mocking and test doubles
+    from their current testing activities, e.g. mocking and test doubles
     more generally?
 
 ## Synthesis
 
-In order to test the above hypothesis, I’d like to spend the rest of
+In order to test the above hypothesis, I'd like to spend the rest of
 this post as follows:
 
 1.  Show how one can implement stateful and parallel property-based
@@ -383,30 +383,30 @@ this post as follows:
     [fakes](https://martinfowler.com/bliki/TestDouble.html) rather than
     state machines.
 
-Before we get started with stateful testing, let’s first recap how
+Before we get started with stateful testing, let's first recap how
 property-based testing of pure functions works.
 
 ### Pure property-based testing recap
 
-It’s considered good practice to test new functions or functionality, to
-make sure it does what we want. For example, imagine we’ve written a
+It's considered good practice to test new functions or functionality, to
+make sure it does what we want. For example, imagine we've written a
 linked-list reversal function called `reverse`, then it might be
 sensible to test it against a couple of lists such as the empty list
 and, say, the three element list `[1, 2, 3]`.
 
 How does one choose which example inputs to test against though?
 Typically one wants to choose corner cases, such as the empty list, that
-perhaps were overlooked during the implementation. It’s difficult to
+perhaps were overlooked during the implementation. It's difficult to
 think of corner cases that you might have overlooked! This is where
 generating random inputs, a key feature of property-based testing, comes
 in. The idea being that random inputs will eventually hit corner cases.
 
 When we manually pick inputs for our tests, like `[1, 2, 3]`, we know
 what the output should be and so we can make the appropriate assertion,
-i.e. `reverse [1, 2, 3] == [3, 2, 1]`. When we generate random inputs we
-don’t always know what the output should be. This is where writing
+i.e. `reverse [1, 2, 3] == [3, 2, 1]`. When we generate random inputs we
+don't always know what the output should be. This is where writing
 properties that relate the output to the input somehow comes in. For
-example, while we don’t know what the output of reversing an arbitrary
+example, while we don't know what the output of reversing an arbitrary
 list is, we do know that reversing it twice will give back the input.
 This is how we can express this property in QuickCheck:
 
@@ -462,7 +462,7 @@ The list and integer generators are provided by the library and I hope
 you agree that these seem like sensible arbitrary lists to use in our
 tests.
 
-Next let’s have a look at when a property fails. For example this is
+Next let's have a look at when a property fails. For example this is
 what happens if we try to test that the output of reversing a list is
 the input list:
 
@@ -477,16 +477,16 @@ because any shorter list will reverse to itself.
 
 As pointed out earlier, coming up with these properties is by no means
 obvious. There are however a few patterns that come up over and over
-again. With `reverse` we saw an example of an involutory function,
-i.e. `f (f x) == x`, here are a few other examples:
+again. With `reverse` we saw an example of an involutory function, i.e.
+`f (f x) == x`, here are a few other examples:
 
-- Inverses, e.g. `\(i :: Input) -> deserialise (serialise i) == i`;
-- Idempotency, e.g. `\(xs :: [Int]) -> sort (sort xs) == sort xs`;
-- Associativity, e.g. `\(i j k :: Int) -> (i + j) + k == i + (j + k)`;
-- Axioms of abstract data types,
-  e.g. `\(x :: Int)(xs :: [Int]) -> member x   (insert x xs) && not (member x (remove x xs))`;
-- Metamorphic properties,
-  e.g. `\(g :: Graph)(m n :: Node) -> shortestPath g m n ==   shortestPath g n m`.
+- Inverses, e.g. `\(i :: Input) -> deserialise (serialise i) == i`;
+- Idempotency, e.g. `\(xs :: [Int]) -> sort (sort xs) == sort xs`;
+- Associativity, e.g. `\(i j k :: Int) -> (i + j) + k == i + (j + k)`;
+- Axioms of abstract data types, e.g.
+  `\(x :: Int)(xs :: [Int]) -> member x (insert x xs) && not (member x (remove x xs))`;
+- Metamorphic properties, e.g.
+  `\(g :: Graph)(m n :: Node) -> shortestPath g m n == shortestPath g n m`.
 
 Readers familiar with discrete math might recognise some of the above.
 
@@ -507,7 +507,7 @@ the generated input to to produce the output `o`. In the case of the
 (`[Int]`), `f` is `reverse . reverse` and the property that we check for
 every generated input is that input is equal to the output.
 
-Next let’s contrast this picture with how the test setup looks when we
+Next let's contrast this picture with how the test setup looks when we
 are testing a stateful component. A simple example of a stateful
 component is a counter with an `incr`ement operation which increment the
 counter and returns the old count.
@@ -532,20 +532,20 @@ In the stateful case, the picture looks more like this:
 
         ---------------------------------> time
 
-Where `s` is the state, `i` is an input (e.g. `incr`) and `o` is an
+Where `s` is the state, `i` is an input (e.g. `incr`) and `o` is an
 ouput. Notice how the state evolves over time and depends on the history
 of inputs.
 
 In the pure case each test case is a single input, in the stateful case
 we need a sequence of inputs in order to test how the system changes
 over time. In the pure case our our properties were relations on the
-input and output, i.e. `R : i -> o -> Bool`. In the stateful case our
+input and output, i.e. `R : i -> o -> Bool`. In the stateful case our
 properties would need to be generalised to `R' : [i] -> [o] -> Bool` to
 account for how the state changes over time. Writing such properties is
 cumbersome, an alternative is to account for the state explicitly by
 means of some kind of model.
 
-This model could be a state machine of type `m -> i -> (m, o)`, i.e. a
+This model could be a state machine of type `m -> i -> (m, o)`, i.e. a
 function from the old model and an input to the next model and the
 output. From this we can derive a property that for each input checks if
 the outputs of the stateful component agrees with the output of the
@@ -568,7 +568,7 @@ state machine:
 In case the outputs disagree we shrink the sequence of inputs and try to
 present the smallest counterexample, as in the pure case.
 
-Let’s make things more concrete with some actual code that we can run.
+Let's make things more concrete with some actual code that we can run.
 
 #### Example: counter
 
@@ -580,7 +580,7 @@ All examples, in the rest of this post, will have three parts:
 
 The first part is independent of the stateful testing library we are
 building. The second part is hooking up the first part to the library by
-implementing an interface (type class). We’ll look at the definition of
+implementing an interface (type class). We'll look at the definition of
 the type class after the example. The final part is how to write the
 actual property and interpret the output from running them.
 
@@ -603,13 +603,13 @@ get :: IO Int
 get = readIORef gLOBAL_COUNTER
 ```
 
-Notice that here `incr` doesn’t return the old value, like above, and
+Notice that here `incr` doesn't return the old value, like above, and
 instead we have a separate operation `get` which returns the current
 value of the counter.
 
 ##### Model
 
-To model our counter we’ll use an integer.
+To model our counter we'll use an integer.
 
 ``` haskell
 newtype Counter = Counter Int
@@ -658,10 +658,10 @@ instance StateModel Counter where
 ```
 
 A common complaint is that the model (`Counter` and `runFake`) is as big
-as the implementation itself. This is true, because it’s an example. In
+as the implementation itself. This is true, because it's an example. In
 reality the model will often be many orders of magnitude smaller. This
 is due to the fact that the model, unlike the real implementation,
-doesn’t need to persisting to disk, communicating over the network, or
+doesn't need to persisting to disk, communicating over the network, or
 various perform time or space optimisations. Recall the LevelDB example
 from above.
 
@@ -695,7 +695,7 @@ Where the first group of percentages tell us the proportion of tests
 that contained the get and increment command respectively, and the
 second group of percentages tell us the proportion of get and increment
 commands out of all commands generated. Note that the first group
-doesn’t add up to 100%, because most tests will contain both commands,
+doesn't add up to 100%, because most tests will contain both commands,
 whereas the second group does. The reason the second group is almost
 50-50 is because in the generator we generate both commands with equal
 probability.
@@ -704,9 +704,9 @@ Another thing to note is that we need to `reset` the counter between
 tests, otherwise the global counter will have the value from the last
 test while the model always starts from zero and we get a mismatch.
 
-To make things a bit more interesting, let’s introduce a bug into our
-counter and see if the tests can find it. Let’s make it so that if the
-counter has the value of 42, then it won’t increment properly.
+To make things a bit more interesting, let's introduce a bug into our
+counter and see if the tests can find it. Let's make it so that if the
+counter has the value of 42, then it won't increment properly.
 
 ``` haskell
 incr42Bug :: IO ()
@@ -726,7 +726,7 @@ as follows.
 + runReal Incr = Incr_ <$> incr42Bug
 ```
 
-When we run the property now, we’ll see something like the following
+When we run the property now, we'll see something like the following
 output.
 
     *** Failed! Assertion failed (after 66 tests and 29 shrinks):
@@ -787,13 +787,13 @@ it.
 #### Stateful library implementation
 
 In the example above we implemented the `StateModel` interface (or type
-class), next we’ll have a look at the definiton of this interface and
+class), next we'll have a look at the definiton of this interface and
 the testing functionality we can derive by programming against the
 interface.
 
 ##### Stateful testing interface
 
-Let me give you the full definition of the interface and then I’ll
+Let me give you the full definition of the interface and then I'll
 explain it in words afterwards.
 
 ``` haskell
@@ -859,14 +859,14 @@ class ( ...
 The interface is parametrised by a `state` type that the user needs to
 define before instantiating the interface. In the counter example
 `state` is `newtype Counter = Counter Int`. The user needs to provide an
-`initialState :: state` from which we’ll start generating commands and
+`initialState :: state` from which we'll start generating commands and
 executing the model, in the counter case this is `Counter 0`.
 
 As part of the instantiating the user also needs to specify a type of
 `Command`s and `Response`s, these were the `Incr` and `Get` operations
 of the counter and their response types respectively.
 
-In addition there’s also three optional types, that we’ve not needed in
+In addition there's also three optional types, that we've not needed in
 the counter example. The first is references, these are used to refer
 back to previously created resources. For example if we open a file
 handle on a POSIX-like filesystem, then later commands need to be able
@@ -874,13 +874,13 @@ to refer to that file handle when wanting to write or read from it. The
 second datatype is `PreconditionFailure`, which is used to give a nice
 error message when a command is executed in a disallowed state. For
 example if we try to read from a file handle that has been closed. The
-third data type is `CommandMonad` which let’s us use a different monad
-than `IO` for executing our commands in. After we’ve finished with the
-interface definition we’ll come back to more examples where we’ll use
+third data type is `CommandMonad` which let's us use a different monad
+than `IO` for executing our commands in. After we've finished with the
+interface definition we'll come back to more examples where we'll use
 these optional types, hopefully these examples will help make things
 more concrete.
 
-We’ve already seen that the user needs to provide a way to generate
+We've already seen that the user needs to provide a way to generate
 single commands, the only thing worth mentioning is that in case our
 commands are parametrised by references then during the generation phase
 we only deal with `Var`s of references, where `data Var a = Var Int`.
@@ -891,34 +891,34 @@ which real references will be substituted in once the real references
 are created during execution.
 
 Shrinking of individual commands is optional and disabled by default,
-but as we’ve seen this doesn’t exclude the sequence of commands to be
-shrunk. We’ll shall see shortly how that is done in detail.
+but as we've seen this doesn't exclude the sequence of commands to be
+shrunk. We'll shall see shortly how that is done in detail.
 
 Next up we got `runFake` and `runReal` which executes a command against
 the `state` model and the real system respectively. Notice how `runFake`
 can fail with a `PreconditionFailure`, whereas `runReal` is always
 expected to succeed (because if a command fails the precondition check,
-then it won’t get generated and hence never reach `runReal`). Another
+then it won't get generated and hence never reach `runReal`). Another
 difference is that `runFake` uses symbolic references, while `runReal`
-deals with real references. We’ll shortly see how this substitution of
+deals with real references. We'll shortly see how this substitution of
 references works.
 
 Lastly we have two optional functions related to keeping statistics of
 generated test cases, which is useful for coverage reporting among other
-things. We’ll come back to how these can be used as we look at more
-examples after we’ve defined our stateful property-based testing
+things. We'll come back to how these can be used as we look at more
+examples after we've defined our stateful property-based testing
 library.
 
 ##### Generating and shrinking
 
 Once we have our interface we can start writing functions against the
 interface. These functions are what the user gets once they implement
-the interface. In this section we’ll have a look at generation of
+the interface. In this section we'll have a look at generation of
 sequences of `Commands`, which will be the inputs for our tests, and how
 to shrink said inputs to produce a minimal counterexample.
 
-Let’s start by defining `Commands`, notice that they use symbolic
-references (i.e. `Var (Reference state)`):
+Let's start by defining `Commands`, notice that they use symbolic
+references (i.e. `Var (Reference state)`):
 
 ``` haskell
 newtype Commands state = Commands
@@ -926,11 +926,11 @@ newtype Commands state = Commands
 ```
 
 As mentioned above, when we generate commands we cannot generate real
-references, e.g. file handles, thus `Var (Reference state)` is used
+references, e.g. file handles, thus `Var (Reference state)` is used
 which is isomorphic to just an `Int`.
 
-Sometimes it’s convenient to split up `runFake` into two parts, the
-first checks if the command is allowed in the current state, i.e. the
+Sometimes it's convenient to split up `runFake` into two parts, the
+first checks if the command is allowed in the current state, i.e. the
 precondition holds:
 
 ``` haskell
@@ -951,11 +951,11 @@ nextState s cmd = case runFake cmd s of
   Left _err -> error "nextState: impossible, we checked for success in precondition"
 ```
 
-We assume that we’ll only ever look at the `nextState` when the
+We assume that we'll only ever look at the `nextState` when the
 `precondition` holds.
 
-Using these two functions we can implement QuickCheck’s `Arbitrary` type
-class for `Commands` which let’s us generate and shrink `Commands`:
+Using these two functions we can implement QuickCheck's `Arbitrary` type
+class for `Commands` which let's us generate and shrink `Commands`:
 
 ``` haskell
 instance StateModel state => Arbitrary (Commands state) where
@@ -1013,7 +1013,7 @@ instance StateModel state => Arbitrary (Commands state) where
                     go s' vars' (cmd : acc) cmds
 ```
 
-Notice how after shrinking we prune away all commands that don’t pass
+Notice how after shrinking we prune away all commands that don't pass
 the precondition.
 
 The intuition here is that as we remove commands from the originally
@@ -1023,7 +1023,7 @@ we made invalid in the process of shrinking.
 
 ##### Running and assertion checking
 
-Once we’ve generated `Commands` we need to execute them against the
+Once we've generated `Commands` we need to execute them against the
 model and the real system using `runFake` and `runReal`. In the process
 of doing so `runReal` will produce `Reference`s that later commands
 might use, so we also need to substitute symbolic references for real
@@ -1071,16 +1071,16 @@ Where `Env` is defined as follows.
 newtype Env state = Env { unEnv :: IntMap (Reference state) }
 ```
 
-That’s all the pieces we need to implement that `Counter` example that
+That's all the pieces we need to implement that `Counter` example that
 we saw above, plus some new constructs to deal with precondition
 failures and references.
 
-Next let’s have a look at an example where we need preconditions and
+Next let's have a look at an example where we need preconditions and
 references.
 
 #### Example: circular buffer
 
-This example is taken from John’s paper [*Testing the hard stuff and
+This example is taken from John's paper [*Testing the hard stuff and
 staying
 sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
 (2014).
@@ -1089,8 +1089,8 @@ sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550
 
 The implementation is written in C and uses two indices which keep track
 of the front and back of the queue, this allows us to implement the
-queue in a circular fashion. I’ve copied the C code straight from the
-paper. In order to test it from Haskell, we’ll use Haskell’s foreign
+queue in a circular fashion. I've copied the C code straight from the
+paper. In order to test it from Haskell, we'll use Haskell's foreign
 function interface.
 
 ``` c
@@ -1123,17 +1123,17 @@ int size(Queue *q) {
 }
 ```
 
-Notice that the C code doesn’t do any error checking, e.g. if we `get`
-from an empty queue then we’ll get back uninitialised memory.
+Notice that the C code doesn't do any error checking, e.g. if we `get`
+from an empty queue then we'll get back uninitialised memory.
 
 ##### Model
 
 The circular buffer implementation is very efficient, because it reuses
-the allocated memory as we go around in circles, but it’s not obviously
+the allocated memory as we go around in circles, but it's not obviously
 correct.
 
-To model queues we’ll use a more straight forward non-circular
-implementation. This is less efficient (doesn’t matter as it’s merely
+To model queues we'll use a more straight forward non-circular
+implementation. This is less efficient (doesn't matter as it's merely
 used during testing), but hopefully more obviously correct.
 
 ``` haskell
@@ -1158,7 +1158,7 @@ emptyState = Map.empty
 Where `Queue` is the Haskell data type that corresponds to the C `Queue`
 and the `Var a` data type is provided by the library and is a symbolic
 reference to `a` (just an `Int`eger). The idea being that in the model
-we don’t have access to real `Queue`s, merely symbolic references to
+we don't have access to real `Queue`s, merely symbolic references to
 them. This might seem a bit strange, but I hope that it will become more
 clear when we model `new`.
 
@@ -1176,9 +1176,9 @@ fNew sz s =
 
 As we have access to the state when defining our model, we can create
 new unique symbolic references by simply counting how many symbolic
-references we’ve created previously (using `Map.size`)[^2].
+references we've created previously (using `Map.size`)[^2].
 
-As we said before, in the C code we don’t do any error checking. In the
+As we said before, in the C code we don't do any error checking. In the
 model we do check that, for example, the queue is non-empty before we
 `fGet` an item. These are our preconditions.
 
@@ -1207,9 +1207,9 @@ fSize q s
   | otherwise           = return (s, length (fqElems (s Map.! q)))
 ```
 
-Recall that we won’t generate a get operation unless the precondition
-holds in the state that we are currently in, i.e. we will never generate
-gets if the queue is empty and thus we’ll never execute the C code for
+Recall that we won't generate a get operation unless the precondition
+holds in the state that we are currently in, i.e. we will never generate
+gets if the queue is empty and thus we'll never execute the C code for
 `get` which gives back uninitialised memory.
 
 Having defined our model the interface implementation is almost
@@ -1267,8 +1267,8 @@ instance StateModel State where
 
 The only new thing worth paying attention to is the `q` in `Command` and
 `Response`, which is parametrised so that it works for both symbolic and
-real references. The `Functor` instance let’s us to substitution, while
-`Foldable` let’s us extract all new references from a response, so that
+real references. The `Functor` instance let's us to substitution, while
+`Foldable` let's us extract all new references from a response, so that
 we can substitute them in later `Command`s.
 
 ##### Testing
@@ -1296,11 +1296,11 @@ error.
 
 So we create a new queue of size `1`, put two items (`0` and `1`) into
 it, and finally we read a value from the queue and this is where the
-assertion fails. Or model returns `0`, because it’s a FIFO queue, but
+assertion fails. Or model returns `0`, because it's a FIFO queue, but
 the C code returns `1`. The reason for this is that in the C code
-there’s no error checking, so writing a value to a full queue simply
-overwrites the oldest value. So there’s actually nothing wrong with the
-implementation, but rather the model is wrong. We’ve forgotten a
+there's no error checking, so writing a value to a full queue simply
+overwrites the oldest value. So there's actually nothing wrong with the
+implementation, but rather the model is wrong. We've forgotten a
 precondition:
 
 ``` diff
@@ -1333,8 +1333,8 @@ unit_queueFull = quickCheck (withMaxSuccess 1 (expectFailure (prop_queue cmds)))
       ]
 ```
 
-Notice that we can basically copy-paste `cmds` from QuickCheck’s output,
-but I’ve done some formatting here to make it more readable.
+Notice that we can basically copy-paste `cmds` from QuickCheck's output,
+but I've done some formatting here to make it more readable.
 
 After fixing the precondition for `fPut`, `unit_queueFull` fails as
 follows:
@@ -1358,8 +1358,8 @@ again, because all preconditions need to hold, and the property passes:
     41.25% Put
     14.62% Get
 
-However as we can see in the output there’s no coverage for `Size`! The
-reason for this is because we’ve forgot to add it to our generator:
+However as we can see in the output there's no coverage for `Size`! The
+reason for this is because we've forgot to add it to our generator:
 
 ``` diff
   generateCommand s
@@ -1406,7 +1406,7 @@ In `put` when we do `q->inp = (q->inp + 1) % q->size` we get
 `(0 - 0) % 1 == 0`. One way to fix this is to make `q->size` be `n + 1`
 rather than `n` where `n` is the size parameter of `new`, that way `put`
 will do `q->inp = (0 + 1) % 2 == 1` instead and size will be
-`1 - 0 % 2 == 1` which is correct. Here’s the diff:
+`1 - 0 % 2 == 1` which is correct. Here's the diff:
 
 ``` diff
   Queue *new(int n) {
@@ -1446,7 +1446,7 @@ we get the following error:
     Expected: Size_ 1
     Got: Size_ (-1)
 
-After the second `put` we’ll have `q->inp = (1 + 1) % 2 == 0` while
+After the second `put` we'll have `q->inp = (1 + 1) % 2 == 0` while
 `q->outp = 1` due to the `get` and so when we call `size` we get
 `0 - 1 % 2 == -1`. Taking the absolute value:
 
@@ -1489,8 +1489,8 @@ and believe that their implementation works, but if we rerun it again
     Got: Size_ 1
 
 We can see that all queues of size `1` now work, because this test
-starts by creating a queue of size `2`, so we’ve made progress. But
-taking the absolute value isn’t the correct way to calculate the size
+starts by creating a queue of size `2`, so we've made progress. But
+taking the absolute value isn't the correct way to calculate the size
 (even though it works for queues of size `1`), the following is the
 correct way to do it:
 
@@ -1507,14 +1507,14 @@ development and debugging of code.
 
 #### Example: jug puzzle from Die Hard 3
 
-In the movie Die Hard 3 there’s an
+In the movie Die Hard 3 there's an
 [scene](https://www.youtube.com/watch?v=BVtQNK_ZUJg) where Bruce Willis
 and Samuel L. Jackson have to solve a puzzle in order to stop a bomb
 from going off. The puzzle is: given a 3L and a 5L jug, how can you
 measure exactly 4L?
 
 I first saw this example solved using TLA+ and I wanted to include it
-here because it shows that we don’t necessarily need a real
+here because it shows that we don't necessarily need a real
 implementation, merely running the model/fake can be useful.
 
 The main idea is to model the two jugs and all actions we can do with
@@ -1617,18 +1617,18 @@ When we run `quickcheck prop_dieHard` we get the following output:
         Got: Done
 
 Notice how the trace shows the intermediate states, making it easy to
-verify that it’s indeed a correct solution to the puzzle[^3].
+verify that it's indeed a correct solution to the puzzle[^3].
 
 ### Parallel property-based testing in ~230 LOC
 
-Let’s now turn our focus to parallel property-based testing.
+Let's now turn our focus to parallel property-based testing.
 
 Debugging buggy concurrent code is not fun. The main reason for this is
 that the threads interleave in different ways between executions, making
 it hard to reproduce the bug and hard to verify that a bug fix actually
 worked.
 
-Ideally we’d like to make working with concurrent code as pleasant as
+Ideally we'd like to make working with concurrent code as pleasant as
 the sequential stateful case and without the user having to write any
 additional test code.
 
@@ -1636,7 +1636,7 @@ In order to explain how we can achieve this, we need to first understand
 how we can test concurrent code in a reproducible way.
 
 Recall our `Counter` that we looked at in the sequential testing case.
-Here we’ll be using a slight generalisation where the `incr` takes an
+Here we'll be using a slight generalisation where the `incr` takes an
 integer parameter which specifies by how much we want to increment (as
 opposed to always incrementing by `1`).
 
@@ -1647,7 +1647,7 @@ opposed to always incrementing by `1`).
 3
 ```
 
-When we interact with the counter sequentially, i.e. one command at the
+When we interact with the counter sequentially, i.e. one command at the
 time, then it appears to count correctly.
 
 But if we instead concurrently issue the `incr`ements , we see something
@@ -1663,7 +1663,7 @@ strange:
 ```
 
 After 29768 iterations we get back `1` rather than the expected `3`! The
-reason for this is because there’s a race condition in the
+reason for this is because there's a race condition in the
 implementation of `incr`:
 
 ``` haskell
@@ -1673,7 +1673,7 @@ implementation of `incr`:
 ```
 
 Because we first read the old value and *then* write the new incremented
-value in an non-atomic way, it’s possilbe that if two threads do this at
+value in an non-atomic way, it's possilbe that if two threads do this at
 the same time they overwrite each others increment. For example:
 
        thread 1, incr 1     |  thread 2, incr 2
@@ -1694,7 +1694,7 @@ writing to the `IORef`.
 The concurrent test that we just wrote is not only specific to the
 counter example but also only uses three fixed commands, the two
 concurrent `incr`ements followed by a `get`. While it was enough to find
-this race condition, in general we’d like to try arbitrary combinations
+this race condition, in general we'd like to try arbitrary combinations
 of commands and possibly involving more than two threads.
 
 The key concept we need in order to accomplish that is that of
@@ -1709,9 +1709,9 @@ width=60%>
 
 Here we see that the first and second thread concurrently increment, the
 first thread then reads the counter concurrently with the second
-thread’s increment that’s still going on. The second thread’s increment
+thread's increment that's still going on. The second thread's increment
 finishes and a third thread does a read which is concurrent with the
-first thread’s read.
+first thread's read.
 
 We can abstract away the arrows and merely focus on the intervals of the
 commands:
@@ -1726,11 +1726,11 @@ If we rotate the intervals we get the concurrent history:
 src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/concurrent_counter.svg"
 width=60%>
 
-Note that the execution of some commands overlap in time, this is what’s
-meant by concurrent and arguebly it’s easier to see the overlap here
+Note that the execution of some commands overlap in time, this is what's
+meant by concurrent and arguebly it's easier to see the overlap here
 than in the original sequence diagram.
 
-We’ve also abstracted away the counter, it’s a black box from the
+We've also abstracted away the counter, it's a black box from the
 perspective of the threads. The only thing we know for sure is when we
 invoked the operation and when it returned, which is what our interval
 captures. We also know that the effect of the operation must have
@@ -1739,7 +1739,7 @@ happend sometime within that interval.
 One such concurrent history can have different interleavings, depending
 on when exactly the effect of the commands happen. Here are two possible
 interleavings, where the red cross symbolises when the effect happened
-(i.e. when exactly the counter update its state).
+(i.e. when exactly the counter update its state).
 
 The first corresponds to the sequential history
 `< incr 1, get, incr 2, get >`:
@@ -1755,17 +1755,17 @@ and the other interleaving corresponds to the sequential history
 src="https://raw.githubusercontent.com/stevana/stateful-pbt-with-fakes/main/images/concurrent_counter_get_3_3.svg"
 width=60%>
 
-One last thing we’ve left out from the concurrent history so far is the
+One last thing we've left out from the concurrent history so far is the
 responses. In this example, the only interesting responses are those of
 the `get`s.
 
-Let’s say that the `get`s returned `1` and `3` respectively. Is this a
-correct concurrent outcome? Yes, according to linearisability it’s
+Let's say that the `get`s returned `1` and `3` respectively. Is this a
+correct concurrent outcome? Yes, according to linearisability it's
 enough to find a single interleaving for which the sequential state
 machine model can explain the outcome and in this case the first
 interleaving above `< incr 1, get, incr 2, get >` does that.
 
-What if the `get`s both returned `3`? That’s also correct and witnessed
+What if the `get`s both returned `3`? That's also correct and witnessed
 by the second interleaving `< incr 1, incr 2, get, get >`. When we can
 find a sequential interleaving that supports the outcome of a concurrent
 execution we say that the concurrent history linearises.
@@ -1774,7 +1774,7 @@ If the `get` on the third thread returned `1` or `2` however, then it
 would be a non-linearisable outcome. We can see visually that that `get`
 happens after both `incr`, so no matter where we choose to place the red
 crosses on the `incr`s the effects will happen before that `get` so it
-must return `3`. Is it even possilbe that `1` or `2` are returned? It’s,
+must return `3`. Is it even possilbe that `1` or `2` are returned? It's,
 imagine if `incr` is implemented by first reading the current value then
 storing the incremented value, in that case there can be a race where
 the `incr`s overwrite each other.
@@ -1786,17 +1786,17 @@ diagrams should be) which respects the a sequential state machine model
 specfication. If we find a single one that does, then we say that the
 history linearises and that the concurrent execution is correct, if we
 cannot find a sequential interleaving that respects the model then the
-history doesn’t linearise and we have found a problem.
+history doesn't linearise and we have found a problem.
 
 #### Parallel library implementation
 
-Let’s try to implement the above. We’ll split up the implementation in
-three parts. First we’ll show how to generate and shrink parallel
+Let's try to implement the above. We'll split up the implementation in
+three parts. First we'll show how to generate and shrink parallel
 commands, these will be different than the sequential commands as we
-have more than one thread that does the execution. Second we’ll
+have more than one thread that does the execution. Second we'll
 implement linearisability checking by trying to find an interleaving of
 the concurrent history which respects the sequential model. Finally,
-we’ll have a look at how to execute the generated parallel commands to
+we'll have a look at how to execute the generated parallel commands to
 produce a concurrent history.
 
 ##### Parallel program generation and shrinking
@@ -1866,38 +1866,38 @@ The problem with preconditions in the parallel case
     that one client unknowingly breaks another clients precondition.
 
     E.g. `Fork (Rename "x" "y") (Remove "x")`, where the precondition
-    for both commands is that “x” exists. If `Rename` gets executed
-    first then it would break `Remove`’s precondition and vice versa.
+    for both commands is that "x" exists. If `Rename` gets executed
+    first then it would break `Remove`'s precondition and vice versa.
 
 2.  Drop all preconditions in the parallel case and make all commands be
-    able to fail gracefully instead of crashing,
-    e.g. `Remove_ (Either Doesn'tExist      ())`. The problem with this
-    approach is that examples such as the ticket dispenser have
-    initialisation commands such as `New` which create a ticket
-    dispenser reference upon which the later commands depend on, so
-    without preconditions forbidding more than one `New` we can end up
-    generating: `Fork New New`, which doesn’t make sense. It should also
-    be noted that making `New` fail gracefully when a `New` has already
-    been executed would need a global boolean flag, which is ugly.
+    able to fail gracefully instead of crashing, e.g.
+    `Remove_ (Either Doesn'tExist ())`. The problem with this approach
+    is that examples such as the ticket dispenser have initialisation
+    commands such as `New` which create a ticket dispenser reference
+    upon which the later commands depend on, so without preconditions
+    forbidding more than one `New` we can end up generating:
+    `Fork New New`, which doesn't make sense. It should also be noted
+    that making `New` fail gracefully when a `New` has already been
+    executed would need a global boolean flag, which is ugly.
 
 3.  checking that the preconditions hold in all interleavings + pulse
-    paper says that’s what they do + what qsm does + if states diverge,
+    paper says that's what they do + what qsm does + if states diverge,
     we can generate:
 
-4.  ensure data dependencies hold “constrained only by the data
+4.  ensure data dependencies hold "constrained only by the data
     dependencies between them (which arise from symbolic variables,
-    bound in one command, being used in a later one).”
+    bound in one command, being used in a later one)."
 
     - needs atomic counter in the \[fork\] case? probably not if the env
       extension happens outside of mapConcurrently?
 
-    - it doesn’t matter which of the possible interleavings we use:
+    - it doesn't matter which of the possible interleavings we use:
 
       1.  if we add a ref in one of the forks, then
 
-    - being in scope (the env) isn’t the same as being in the model
+    - being in scope (the env) isn't the same as being in the model
 
-      - in scope means that we’ve created the concrete ref and know how
+      - in scope means that we've created the concrete ref and know how
         to translate from symbolic commands
       - being in the model means we can generate new commands using it
       - references are montonically added to env, but might be removed
@@ -1908,7 +1908,7 @@ The problem with preconditions in the parallel case
     ```
 
 ParallelCommands { parPrefix = \[ Spawn \] , parSuffixes = \[ Two \[
-Register “c” (Var 0) \] \[ Unregister “c” \] , Two \[ Register “a” (Var
+Register "c" (Var 0) \] \[ Unregister "c" \] , Two \[ Register "a" (Var
 0) \] \[\] \] }
 
     ====>
@@ -2131,7 +2131,7 @@ prop_parallelCounter cmds = monadicIO $ do
 ```
 
 If you forgot how the interface implementation for the `Counter` example
-looked, no need to scoll up we’ll give a very similar example next.
+looked, no need to scoll up we'll give a very similar example next.
 
 This example is very similar to the ticket dispenser example that
 appears in [*Testing the hard stuff and staying
@@ -2142,7 +2142,7 @@ sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550
 
 This example comes from the paper [*QuickCheck testing for fun and
 profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
-(2007) and is also part of John’s Midlands Graduate School course
+(2007) and is also part of John's Midlands Graduate School course
 (2019).
 
 The parallel tests for the process registry was introduced in [*Finding
@@ -2163,15 +2163,16 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
   stateful and parallel property-based testing?
 
 - Fake instead of state machine spec is not only easier for programmers
-  unfamilar with formal specification, it’s also more useful in that the
+  unfamilar with formal specification, it's also more useful in that the
   fake can be used in integration tests with components that depend on
   the SUT
 
 - let this be your prototype
 
-- https://martinfowler.com/bliki/ContractTest.html
+- <https://martinfowler.com/bliki/ContractTest.html>
 
-- Edsko’s lockstep https://www.well-typed.com/blog/2019/01/qsm-in-depth/
+- Edsko's lockstep
+  <https://www.well-typed.com/blog/2019/01/qsm-in-depth/>
 
 - [Integrated Tests Are A
   Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger
@@ -2210,14 +2211,14 @@ iServiceA :: IServiceB -> IO IServiceA
 
 #### Stateful
 
-I’d like to explain where my inspiration is coming from, because I think
-it’s important to note that the code I’m about to present didn’t come
+I'd like to explain where my inspiration is coming from, because I think
+it's important to note that the code I'm about to present didn't come
 from thin air (even though it might look simple).
 
-I’ve been thinking about this problem since the end of 2016 as can be
+I've been thinking about this problem since the end of 2016 as can be
 witnesed by my involvement in the following
 [issue](https://github.com/nick8325/quickcheck/issues/139) about adding
-stateful testing to Haskell’s QuickCheck.
+stateful testing to Haskell's QuickCheck.
 
 My initial attempt eventually turned into the Haskell library
 `quickcheck-state-machine`.
@@ -2225,24 +2226,19 @@ My initial attempt eventually turned into the Haskell library
 The version below is a combination of my experience building that
 library, but also inspried by:
 
-1.  Nick Smallbone’s initial
-    [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475)
+1.  Nick Smallbone's initial
+    [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475) (2017)
+    from that same issue. (Nick was, and I think still is, the main
+    maintainer of the original QuickCheck library);
 
-<!-- -->
-
-2017) from that same issue. (Nick was, and I think still is, the main
-      maintainer of the original QuickCheck library);
-
-<!-- -->
-
-2.  John’s Midlands Graduate School
+2.  John's Midlands Graduate School
     [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
 
-3.  Edsko de Vries’ “lockstep”
+3.  Edsko de Vries' "lockstep"
     [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/)
     (2019).
 
-XXX: I’ll refer back to these when I motivate my design decisions below.
+XXX: I'll refer back to these when I motivate my design decisions below.
 
 #### Parallel
 
@@ -2256,12 +2252,12 @@ PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (2009) paper and the [*Linearizability: a correctness condition for
 concurrent
 objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990)
-paper that they reference, it was useful to have a look at the Erlang’s
+paper that they reference, it was useful to have a look at the Erlang's
 PropEr library, which is a (the first?) Quviq QuickCheck clone with
 support for both stateful and parallel testing.
 
 - Not property-based testing per say, but similar in that it generates
-  random commands and checks linearisability is Jepsen’s
+  random commands and checks linearisability is Jepsen's
   [Knossos](https://aphyr.com/posts/309-knossos-redis-and-linearizability)
 
 ## Conclusion and future work
@@ -2307,7 +2303,7 @@ support for both stateful and parallel testing.
     - [*Simple Testing Can Prevent Most Critical
       Failures*](https://www.usenix.org/conference/osdi14/technical-sessions/presentation/yuan)
       by Yuan et al (OSDI 2014)
-    - Jepsen’s knossos checker
+    - Jepsen's knossos checker
   - Simulation testing
     - Always and sometimes combinators?
 
@@ -2327,33 +2323,33 @@ opportunities.
 
 - Daniel for discussing fix for parallel generation issue
 
-[^1]: Is there a source for this story? I can’t remember where I’ve
+[^1]: Is there a source for this story? I can't remember where I've
     heard it. This short
     [biography](http://www.erlang-factory.com/conference/London2011/speakers/JohnHughes)
     gives some of the details:
 
-    > “From 2002-2005 he led a major research project in software
+    > "From 2002-2005 he led a major research project in software
     > verification, funded by the Swedish Strategic Research Foundation.
-    > This led to the development of Quviq QuickCheck in Erlang.”
+    > This led to the development of Quviq QuickCheck in Erlang."
 
     I believe
     [this](https://strategiska.se/forskning/genomford-forskning/ramanslag-inom-it-omradet/projekt/2010/)
     must be the project mentioned above.
 
-[^2]: There’s some room for error here from the users side, e.g. the
+[^2]: There's some room for error here from the users side, e.g. the
     user could create non-unique refererences. In a proper library one
     might want to introduce a `genSym` construct which guarantees
     uniqueness.
 
 [^3]: So stateful property-based testing with a trivial `runReal` can be
-    seen as crude version of a random path exploring “model checker”.
+    seen as crude version of a random path exploring "model checker".
     One could perhaps implement something closer to TLC (the model
     checker for TLA+), which enumerates all paths up to some depth, by
     using `smallcheck` rather than `QuickCheck`. If this topic interests
-    you, you might also want to have a look at Gabriella Gonzalez’s
+    you, you might also want to have a look at Gabriella Gonzalez's
     [HasCal](https://github.com/Gabriella439/HasCal).
 
-    I don’t have an example for this, but I guess one can also think of
+    I don't have an example for this, but I guess one can also think of
     stateful property-based testing with a trivial `runFake` as a crude
     version of a fuzzer (without coverage guidance). For more on this
     and how to add coverage guidance, see [*Coverage guided, property

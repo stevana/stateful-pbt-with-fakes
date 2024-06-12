@@ -777,7 +777,7 @@ words afterwards.
 ```haskell
 class ( ...
 ```
-```haskell {include=src/Stateful.hs snippet=StateModel}
+```{.haskell include=src/Stateful.hs snippet=StateModel}
 ```
 
 The interface is parametrised by a `state` type that the user needs to define
@@ -840,7 +840,7 @@ minimal counterexample.
 Let's start by defining `Commands`, notice that they use symbolic references
 (i.e. `Var (Reference state)`):
 
-```haskell {include=src/Stateful.hs snippet=Commands}
+```{.haskell include=src/Stateful.hs snippet=Commands}
 ```
 
 As mentioned above, when we generate commands we cannot generate real
@@ -850,12 +850,12 @@ isomorphic to just an `Int`.
 Sometimes it's convenient to split up `runFake` into two parts, the first checks
 if the command is allowed in the current state, i.e. the precondition holds:
 
-```haskell {include=src/Stateful.hs snippet=precondition}
+```{.haskell include=src/Stateful.hs snippet=precondition}
 ```
 
 And the second part advances the state:
 
-```haskell {include=src/Stateful.hs snippet=nextState}
+```{.haskell include=src/Stateful.hs snippet=nextState}
 ```
 
 We assume that we'll only ever look at the `nextState` when the `precondition`
@@ -864,10 +864,10 @@ holds.
 Using these two functions we can implement QuickCheck's `Arbitrary` type class
 for `Commands` which let's us generate and shrink `Commands`:
 
-```haskell {include=src/Stateful.hs snippet=arbitrary}
+```{.haskell include=src/Stateful.hs snippet=arbitrary}
 ```
 
-```haskell {include=src/Stateful.hs snippet=shrink}
+```{.haskell include=src/Stateful.hs snippet=shrink}
 ```
 
 Notice how after shrinking we prune away all commands that don't pass the
@@ -886,12 +886,12 @@ the real system using `runFake` and `runReal`. In the process of doing so
 need to substitute symbolic references for real references. This, together
 coverage statatistics bookkeeping, is done in the `runCommands` function:
 
-```haskell {include=src/Stateful.hs snippet=runCommands}
+```{.haskell include=src/Stateful.hs snippet=runCommands}
 ```
 
 Where `Env` is defined as follows.
 
-```haskell {include=src/Stateful.hs snippet=Env}
+```{.haskell include=src/Stateful.hs snippet=Env}
 ```
 
 That's all the pieces we need to implement that `Counter` example that we saw
@@ -1622,7 +1622,7 @@ commands to produce a concurrent history.
 
 First we need define what a parallel program is:
 
-```haskell {include=src/Parallel.hs snippet=ParallelCommands}
+```{.haskell include=src/Parallel.hs snippet=ParallelCommands}
 ```
 
 The idea is that the inner list of commands gets executed in parallel, this list
@@ -1631,13 +1631,13 @@ or triple threaded exeuction there might more, this is what the outer list
 captures.
 
 
-```haskell {include=src/Parallel.hs snippet=ParallelModel}
+```{.haskell include=src/Parallel.hs snippet=ParallelModel}
 ```
 
 
 We can write a generator
 
-```haskell {include=src/Parallel.hs snippet=arbitrary}
+```{.haskell include=src/Parallel.hs snippet=arbitrary}
 ```
 
 The problem with preconditions in the parallel case
@@ -1703,19 +1703,19 @@ ParallelCommands
     ```
 
 
-```haskell {include=src/Parallel.hs snippet=shrink}
+```{.haskell include=src/Parallel.hs snippet=shrink}
 ```
 * shrinking can be improved, see qsm
 
 ##### Linearisability checking
 
-```haskell {include=src/Parallel.hs snippet=History}
+```{.haskell include=src/Parallel.hs snippet=History}
 ```
 
-```haskell {include=src/Parallel.hs snippet=interleavings}
+```{.haskell include=src/Parallel.hs snippet=interleavings}
 ```
 
-```haskell {include=src/Parallel.hs snippet=linearisable}
+```{.haskell include=src/Parallel.hs snippet=linearisable}
 ```
 
 ##### Parallel running
@@ -1729,10 +1729,10 @@ XXX: extend StateModel class:
   runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 ```
 
-```haskell {include=src/Parallel.hs snippet=env}
+```{.haskell include=src/Parallel.hs snippet=env}
 ```
 
-```haskell {include=src/Parallel.hs snippet=runParallelCommands}
+```{.haskell include=src/Parallel.hs snippet=runParallelCommands}
 ```
 
 
