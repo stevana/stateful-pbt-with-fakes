@@ -21,6 +21,7 @@ import Stateful
 
 ------------------------------------------------------------------------
 
+-- start snippet Registry
 data RegState = RegState
   { tids   :: [Var ThreadId]
   , regs   :: [(String, Var (ThreadId))]
@@ -59,6 +60,9 @@ instance StateModel RegState where
     , WhereIs <$> arbitraryName
     ] ++
     [ Kill <$> elements (tids s) | not (null (tids s)) ]
+    where
+      arbitraryName :: Gen String
+      arbitraryName = elements allNames
 
   runFake :: Command RegState (Var ThreadId)-> RegState
           -> Either void (RegState, Response RegState (Var ThreadId))
@@ -104,17 +108,11 @@ instance StateModel RegState where
 abstractError :: ErrorCall -> ErrorCall
 abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
 
-instance ParallelModel RegState where
-  runCommandMonad _ = id
+allNames :: [String]
+allNames = ["a", "b", "c", "d", "e"]
 
 data Tag = RegisterFailed
   deriving Show
-
-arbitraryName :: Gen String
-arbitraryName = elements allNames
-
-allNames :: [String]
-allNames = ["a", "b", "c", "d", "e"]
 
 prop_registry :: Commands RegState -> Property
 prop_registry cmds = monadicIO $ do
@@ -127,6 +125,11 @@ cleanUp = sequence
   [ try (unregister name) :: IO (Either ErrorCall ())
   | name <- allNames
   ]
+-- end snippet Registry
+
+-- start snippet ParallelRegistry
+instance ParallelModel RegState where
+  runCommandMonad _ = id
 
 prop_parallelRegistry :: ParallelCommands RegState -> Property
 prop_parallelRegistry cmds = monadicIO $ do
@@ -135,3 +138,4 @@ prop_parallelRegistry cmds = monadicIO $ do
     runParallelCommands cmds
     void (run cleanUp)
   assert True
+-- start snippet ParallelRegistry

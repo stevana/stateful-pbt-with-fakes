@@ -1807,17 +1807,7 @@ We can avoid having to sprinkle sleeps around our interaction with shared state
 by creating a module with the same operations as on shared memory where the
 sleep is already included:
 
-```haskell
-module SleepyIORef (module SleepyIORef, IORef) where
-
-import Control.Concurrent (threadDelay)
-import Data.IORef (IORef)
-import qualified Data.IORef as IORef
-
-readIORef :: IORef a -> IO a
-readIORef ref = do
-  IORef.readIORef ref
-  threadDelay 100
+```{.haskell include=src/SleepyIORef.hs snippet=SleepyIORef}
 ```
 
 That way if we find a race, we can change the import from `import Data.IORef` to
@@ -1831,6 +1821,12 @@ introduction of sleep is only needed to make the counterexample smaller.
 
 #### Example: process registry
 
+```{.haskell include=src/Example/Registry/Test.hs snippet=Registry}
+```
+
+```{.haskell include=src/Example/Registry/Test.hs snippet=ParallelRegistry}
+```
+
 This example comes from the paper [*QuickCheck testing for fun and
 profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
 (2007) and is also part of John's Midlands Graduate School course (2019).
@@ -1839,9 +1835,6 @@ The parallel tests for the process registry was introduced in [*Finding Race
 Conditions in Erlang with QuickCheck and
 PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
 (2009)
-
-```haskell
-```
 
 #### Example: key-value store
 
