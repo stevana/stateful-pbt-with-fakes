@@ -30,11 +30,14 @@ incr42Bug :: IO ()
 incr42Bug = atomicModifyIORef' gLOBAL_COUNTER
   (\n -> if n == 42 then (n, ()) else (n + 1, ()))
 
+-- start snippet incrRaceCondition
 incrRaceCondition :: IO ()
 incrRaceCondition = do
   n <- readIORef gLOBAL_COUNTER
   threadDelay 100
   writeIORef gLOBAL_COUNTER (n + 1)
+  threadDelay 100
+-- end snippet incrRaceCondition
 
 get :: IO Int
 get = readIORef gLOBAL_COUNTER
@@ -84,25 +87,29 @@ instance StateModel Counter where
   runReal Get  = Get_  <$> get
   -- runReal Incr = Incr_ <$> incr
   -- runReal Incr = Incr_ <$> incr42Bug
+  -- start snippet runReal
   runReal Incr = Incr_ <$> incrRaceCondition
+  -- end snippet runReal
 
   -- This example has no references.
   type Reference Counter = Void
 
+prop_counter :: Commands Counter -> Property
+prop_counter cmds = monadicIO $ do
+  run reset
+  runCommands cmds
+  assert True
+
+-- start snippet parallel-counter
 instance ParallelModel Counter where
 
   -- The command monad is IO, so we don't need to do anything here.
   runCommandMonad _ = id
 
-prop_counter :: Commands Counter -> Property
-prop_counter cmds = monadicIO $ do
-  runCommands cmds
-  run reset
-  assert True
-
 prop_parallelCounter :: ParallelCommands Counter -> Property
 prop_parallelCounter cmds = monadicIO $ do
   replicateM_ 10 $ do
-    runParallelCommands cmds
     run reset
+    runParallelCommands cmds
   assert True
+-- end snippet parallel-counter

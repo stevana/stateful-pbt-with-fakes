@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -18,6 +18,7 @@ import Control.Monad.IO.Class
 import Data.Coerce
 import Data.Containers.ListUtils (nubOrd)
 import Data.Foldable
+import qualified Data.IntMap as IntMap
 import Data.IORef
 import Data.List (permutations)
 import Data.Proxy
@@ -265,6 +266,9 @@ extendEnvParallel :: Env state -> AtomicCounter -> [Reference state] -> IO (Env 
 extendEnvParallel env c refs = do
   i <- incrAtomicCounter c (length refs)
   return (extendEnv env (zip [i..] refs))
+
+combineEnvs :: [Env state] -> Env state
+combineEnvs = Env . IntMap.unions . map unEnv
 -- end snippet env
 
 ------------------------------------------------------------------------

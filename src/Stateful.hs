@@ -273,6 +273,3 @@ lookupEnv (Env im) (Var i) = im IntMap.! i
 
 extendEnv :: Env state -> [(Int, Reference state)] -> Env state
 extendEnv (Env im) refs = Env (im `IntMap.union` IntMap.fromList refs)
-
-combineEnvs :: [Env state] -> Env state
-combineEnvs = Env . IntMap.unions . map unEnv

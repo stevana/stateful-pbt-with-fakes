@@ -1990,7 +1990,21 @@ more sequential, and moving forks after smaller forks, e.g.
 less potential concurrent interleavings. For simplicity, we've chosen
 not to implemented those here.
 
-##### Linearisability checking
+##### Parallel running
+
+One final difference in the parallel case is that because of the use of
+threads to achieve parallel execution, and the fact we can only spawn
+threads of things of type `IO`, we also need to be able to interpret our
+`CommandMonad` into `IO`, which is what `runCommandMonad` does.
+
+``` haskell
+  -- If another command monad is used we need to provide a way run it inside the
+  -- IO monad. This is only needed for parallel testing, because IO is the only
+  -- monad we can execute on different threads.
+  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
+```
+
+We can now implement parallel execution of commands as follows:
 
 ``` haskell
 newtype History state = History [Event state]
@@ -2008,72 +2022,6 @@ deriving stock instance
 newtype Pid = Pid Int
   deriving stock (Eq, Ord, Show)
   deriving newtype Enum
-```
-
-``` haskell
-data Op state = Op (Command state (Var (Reference state)))
-                   (Response state (Reference state))
-
-interleavings :: History state -> Forest (Op state)
-interleavings (History [])  = []
-interleavings (History evs0) =
-  [ Node (Op cmd resp) (interleavings (History evs'))
-  | (tid, cmd)   <- takeInvocations evs0
-  , (resp, evs') <- findResponse tid
-                      (filter1 (not . matchInvocation tid) evs0)
-  ]
-  where
-    takeInvocations :: [Event state] -> [(Pid, Command state (Var (Reference state)))]
-    takeInvocations []                         = []
-    takeInvocations ((Invoke pid cmd)   : evs) = (pid, cmd) : takeInvocations evs
-    takeInvocations ((Ok    _pid _resp) : _)   = []
-
-    findResponse :: Pid -> [Event state] -> [(Response state (Reference state), [Event state])]
-    findResponse _pid []                                   = []
-    findResponse  pid ((Ok pid' resp) : evs) | pid == pid' = [(resp, evs)]
-    findResponse  pid (ev             : evs)               =
-      [ (resp, ev : evs') | (resp, evs') <- findResponse pid evs ]
-
-    matchInvocation :: Pid -> Event state -> Bool
-    matchInvocation pid (Invoke pid' _cmd) = pid == pid'
-    matchInvocation _   _                  = False
-
-    filter1 :: (a -> Bool) -> [a] -> [a]
-    filter1 _ []                   = []
-    filter1 p (x : xs) | p x       = x : filter1 p xs
-                       | otherwise = xs
-```
-
-``` haskell
-linearisable :: forall state. StateModel state
-             => Env state -> Forest (Op state) -> Bool
-linearisable env = any' (go initialState)
-  where
-    go :: state -> Tree (Op state) -> Bool
-    go s (Node (Op cmd cresp) ts) =
-      case runFake cmd s of
-        Left _preconditionFailure ->
-          error "linearisable: impossible, all precondtions are satisifed during generation"
-        Right (s', resp) ->
-          cresp == fmap (lookupEnv env) resp && any' (go s') ts
-
-    any' :: (a -> Bool) -> [a] -> Bool
-    any' _p [] = True
-    any'  p xs = any p xs
-```
-
-##### Parallel running
-
-One final difference in the parallel case is that because of the use of
-threads to achieve parallel execution, and the fact we can only spawn
-threads of things of type `IO`, we also need to be able to interpret our
-`CommandMonad` into `IO`, which is what `runCommandMonad` does.
-
-``` haskell
-  -- If another command monad is used we need to provide a way run it inside the
-  -- IO monad. This is only needed for parallel testing, because IO is the only
-  -- monad we can execute on different threads.
-  runCommandMonad :: proxy state -> CommandMonad state a -> IO a
 ```
 
 ``` haskell
@@ -2120,27 +2068,189 @@ runParallelCommands cmds0@(ParallelCommands forks0) = do
           return env'
 ```
 
+Extending the environment in the parallel case requires an atomic
+counter in order to avoid more than one thread adding the same variable:
+
+``` haskell
+newtype AtomicCounter = AtomicCounter (IORef Int)
+
+newAtomicCounter :: IO AtomicCounter
+newAtomicCounter = AtomicCounter <$> newIORef 0
+
+-- Returns old value.
+incrAtomicCounter :: AtomicCounter -> Int -> IO Int
+incrAtomicCounter (AtomicCounter ioRef) n =
+  atomicModifyIORef' ioRef (\old -> (old + n, old))
+
+extendEnvParallel :: Env state -> AtomicCounter -> [Reference state] -> IO (Env state)
+extendEnvParallel env c refs = do
+  i <- incrAtomicCounter c (length refs)
+  return (extendEnv env (zip [i..] refs))
+
+combineEnvs :: [Env state] -> Env state
+combineEnvs = Env . IntMap.unions . map unEnv
+```
+
+Hopefully the execution part is clear, next let's have a look at how we
+check the result of an execution.
+
+##### Linearisability checking
+
+Recall from our parallel counter example in the introduction to parallel
+testing that it's enough to find *any* possible interleaving which
+respects the sequential model. So let's start by enumerating all
+possible interleavings using a [`Rose`
+tree](https://hackage.haskell.org/package/containers-0.7/docs/Data-Tree.html)
+datastrucutre:
+
+``` haskell
+data Op state = Op (Command state (Var (Reference state)))
+                   (Response state (Reference state))
+
+interleavings :: History state -> Forest (Op state)
+interleavings (History [])  = []
+interleavings (History evs0) =
+  [ Node (Op cmd resp) (interleavings (History evs'))
+  | (tid, cmd)   <- takeInvocations evs0
+  , (resp, evs') <- findResponse tid
+                      (filter1 (not . matchInvocation tid) evs0)
+  ]
+  where
+    takeInvocations :: [Event state] -> [(Pid, Command state (Var (Reference state)))]
+    takeInvocations []                         = []
+    takeInvocations ((Invoke pid cmd)   : evs) = (pid, cmd) : takeInvocations evs
+    takeInvocations ((Ok    _pid _resp) : _)   = []
+
+    findResponse :: Pid -> [Event state] -> [(Response state (Reference state), [Event state])]
+    findResponse _pid []                                   = []
+    findResponse  pid ((Ok pid' resp) : evs) | pid == pid' = [(resp, evs)]
+    findResponse  pid (ev             : evs)               =
+      [ (resp, ev : evs') | (resp, evs') <- findResponse pid evs ]
+
+    matchInvocation :: Pid -> Event state -> Bool
+    matchInvocation pid (Invoke pid' _cmd) = pid == pid'
+    matchInvocation _   _                  = False
+
+    filter1 :: (a -> Bool) -> [a] -> [a]
+    filter1 _ []                   = []
+    filter1 p (x : xs) | p x       = x : filter1 p xs
+                       | otherwise = xs
+```
+
+We can then check if there is a path through this rose tree which agrees
+with the sequential model:
+
+``` haskell
+linearisable :: forall state. StateModel state
+             => Env state -> Forest (Op state) -> Bool
+linearisable env = any' (go initialState)
+  where
+    go :: state -> Tree (Op state) -> Bool
+    go s (Node (Op cmd cresp) ts) =
+      case runFake cmd s of
+        Left _preconditionFailure ->
+          error "linearisable: impossible, all precondtions are satisifed during generation"
+        Right (s', resp) ->
+          cresp == fmap (lookupEnv env) resp && any' (go s') ts
+
+    any' :: (a -> Bool) -> [a] -> Bool
+    any' _p [] = True
+    any'  p xs = any p xs
+```
+
 #### Example: parallel counter
 
 This is the only new code we need to add to enable parallel testing of
-our `Counter` example from before:
+our `Counter` example\[^4\] from before:
 
 ``` haskell
+instance ParallelModel Counter where
+
+  -- The command monad is IO, so we don't need to do anything here.
+  runCommandMonad _ = id
+
 prop_parallelCounter :: ParallelCommands Counter -> Property
 prop_parallelCounter cmds = monadicIO $ do
   replicateM_ 10 $ do
-    runParallelCommands cmds
     run reset
+    runParallelCommands cmds
   assert True
 ```
 
-If you forgot how the interface implementation for the `Counter` example
-looked, no need to scoll up we'll give a very similar example next.
+If we run the above property with `runReal`
 
-This example is very similar to the ticket dispenser example that
-appears in [*Testing the hard stuff and staying
-sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
-(2014)
+``` haskell
+  runReal Incr = Incr_ <$> incrRaceCondition
+```
+
+being implemented using an increment with a race condition:
+
+``` haskell
+incrRaceCondition :: IO ()
+incrRaceCondition = do
+  n <- readIORef gLOBAL_COUNTER
+  writeIORef gLOBAL_COUNTER (n + 1)
+```
+
+then a failure is found:
+
+     Assertion failed (after 36 tests and 1 shrink):
+          ParallelCommands [Fork [Incr,Incr],Fork [Incr],Fork [Get,Get,Get],Fork [Incr],Fork [Get,Get],Fork [Get,Get],Fork [Incr],Fork [Get,Get,Incr],Fork [Incr],Fork [Get,Get,Get],Fork [Incr,Incr],Fork [Incr,Get],Fork [Incr,Incr],Fork [Get],Fork [Incr]]
+
+But shrinking didn't work very well. The reason for this is that
+QuickCheck tries a smaller test case (which still has the race
+condition), but because of a different interleaving of threads the race
+doesn't get triggered and so QuickCheck thinks it found the minimal test
+case (because the smaller test case, that the shriker picked, passes).
+
+The proper solution to this problem is to use a deterministic thread
+scheduler, this is what they do the parallel testing paper. A simpler
+workaround is to introduce a small sleep after each read or write to
+shared memory, this will make it more likely that the same interleaving
+happens when we shrink the test:
+
+``` haskell
+incrRaceCondition :: IO ()
+incrRaceCondition = do
+  n <- readIORef gLOBAL_COUNTER
+  threadDelay 100
+  writeIORef gLOBAL_COUNTER (n + 1)
+  threadDelay 100
+```
+
+With this change we get the minimal test case that triggers the race
+condition:
+
+    Assertion failed (after 6 tests and 4 shrinks):
+          ParallelCommands [Fork [Incr,Incr],Fork [Get]]
+
+We can avoid having to sprinkle sleeps around our interaction with
+shared state by creating a module with the same operations as on shared
+memory where the sleep is already included:
+
+``` haskell
+module SleepyIORef (module SleepyIORef, IORef) where
+
+import Control.Concurrent (threadDelay)
+import Data.IORef (IORef)
+import qualified Data.IORef as IORef
+
+readIORef :: IORef a -> IO a
+readIORef ref = do
+  IORef.readIORef ref
+  threadDelay 100
+```
+
+That way if we find a race, we can change the import from
+`import Data.IORef` to `import SleepyIORef` and rerun the tests and get
+better shrinking.
+
+This situation is not ideal, but save us the trouble of having to
+reimplement a scheduler.
+
+It's worth stressing that the race is found in the unmodified code and
+the introduction of sleep is only needed to make the counterexample
+smaller.
 
 #### Example: process registry
 

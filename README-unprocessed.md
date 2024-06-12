@@ -1708,17 +1708,6 @@ sequential, and moving forks after smaller forks, e.g. `[Fork [a, b], Fork [c]]
 ==> [Fork [c], Fork [a, b]]`, thus making for less potential concurrent
 interleavings. For simplicity, we've chosen not to implemented those here.
 
-##### Linearisability checking
-
-```{.haskell include=src/Parallel.hs snippet=History}
-```
-
-```{.haskell include=src/Parallel.hs snippet=interleavings}
-```
-
-```{.haskell include=src/Parallel.hs snippet=linearisable}
-```
-
 ##### Parallel running
 
 One final difference in the parallel case is that because of the use of threads
@@ -1727,35 +1716,118 @@ of type `IO`, we also need to be able to interpret our `CommandMonad` into `IO`,
 which is what `runCommandMonad` does.
 
 ```{.haskell include=src/Parallel.hs snippet=runCommandMonad}
+```
 
-```{.haskell include=src/Parallel.hs snippet=env}
+We can now implement parallel execution of commands as follows:
+
+```{.haskell include=src/Parallel.hs snippet=History}
 ```
 
 ```{.haskell include=src/Parallel.hs snippet=runParallelCommands}
 ```
 
+Extending the environment in the parallel case requires an atomic counter in
+order to avoid more than one thread adding the same variable:
+
+```{.haskell include=src/Parallel.hs snippet=env}
+```
+
+Hopefully the execution part is clear, next let's have a look at how we check
+the result of an execution.
+
+##### Linearisability checking
+
+Recall from our parallel counter example in the introduction to parallel testing
+that it's enough to find *any* possible interleaving which respects the
+sequential model. So let's start by enumerating all possible interleavings using
+a [`Rose`
+tree](https://hackage.haskell.org/package/containers-0.7/docs/Data-Tree.html)
+datastrucutre:
+
+```{.haskell include=src/Parallel.hs snippet=interleavings}
+```
+
+We can then check if there is a path through this rose tree which agrees with
+the sequential model:
+
+```{.haskell include=src/Parallel.hs snippet=linearisable}
+```
 
 #### Example: parallel counter
 
 This is the only new code we need to add to enable parallel testing of our
-`Counter` example from before:
+`Counter` example[^4] from before:
 
-```haskell
-prop_parallelCounter :: ParallelCommands Counter -> Property
-prop_parallelCounter cmds = monadicIO $ do
-  replicateM_ 10 $ do
-    runParallelCommands cmds
-    run reset
-  assert True
+```{.haskell include=src/Example/Counter.hs snippet=parallel-counter}
 ```
 
-If you forgot how the interface implementation for the `Counter` example looked,
-no need to scoll up we'll give a very similar example next.
+If we run the above property with `runReal`
 
-This example is very similar to the ticket dispenser example that appears in
-[*Testing the hard stuff and staying
-sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
-(2014)
+```{.haskell include=src/Example/Counter.hs snippet=runReal}
+```
+
+being implemented using an increment with a race condition:
+
+```haskell
+incrRaceCondition :: IO ()
+incrRaceCondition = do
+  n <- readIORef gLOBAL_COUNTER
+  writeIORef gLOBAL_COUNTER (n + 1)
+```
+
+then a failure is found:
+
+```
+ Assertion failed (after 36 tests and 1 shrink):
+      ParallelCommands [Fork [Incr,Incr],Fork [Incr],Fork [Get,Get,Get],Fork [Incr],Fork [Get,Get],Fork [Get,Get],Fork [Incr],Fork [Get,Get,Incr],Fork [Incr],Fork [Get,Get,Get],Fork [Incr,Incr],Fork [Incr,Get],Fork [Incr,Incr],Fork [Get],Fork [Incr]]
+```
+
+But shrinking didn't work very well. The reason for this is that QuickCheck
+tries a smaller test case (which still has the race condition), but because of a
+different interleaving of threads the race doesn't get triggered and so
+QuickCheck thinks it found the minimal test case (because the smaller test case,
+that the shriker picked, passes).
+
+The proper solution to this problem is to use a deterministic thread scheduler,
+this is what they do the parallel testing paper. A simpler workaround is to
+introduce a small sleep after each read or write to shared memory, this will
+make it more likely that the same interleaving happens when we shrink the test:
+
+```{.haskell include=src/Example/Counter.hs snippet=incrRaceCondition}
+```
+
+With this change we get the minimal test case that triggers the race condition:
+
+```
+Assertion failed (after 6 tests and 4 shrinks):
+      ParallelCommands [Fork [Incr,Incr],Fork [Get]]
+```
+
+We can avoid having to sprinkle sleeps around our interaction with shared state
+by creating a module with the same operations as on shared memory where the
+sleep is already included:
+
+```haskell
+module SleepyIORef (module SleepyIORef, IORef) where
+
+import Control.Concurrent (threadDelay)
+import Data.IORef (IORef)
+import qualified Data.IORef as IORef
+
+readIORef :: IORef a -> IO a
+readIORef ref = do
+  IORef.readIORef ref
+  threadDelay 100
+```
+
+That way if we find a race, we can change the import from `import Data.IORef` to
+`import SleepyIORef` and rerun the tests and get better shrinking.
+
+This situation is not ideal, but save us the trouble of having to reimplement a
+scheduler.
+
+It's worth stressing that the race is found in the unmodified code and the
+introduction of sleep is only needed to make the counterexample smaller.
 
 #### Example: process registry
 
@@ -1952,3 +2024,8 @@ formal proof part, we should cherish such eduction opportunities.
     fuzzer (without coverage guidance). For more on this and how to add coverage
     guidance, see [*Coverage guided, property based
     testing*](https://dl.acm.org/doi/10.1145/3360607) (2019).
+
+[^3]: The parallel counter example is very similar to the ticket dispenser
+    example that appears in [*Testing the hard stuff and staying
+    sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
+    (2014).
