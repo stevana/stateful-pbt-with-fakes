@@ -11,7 +11,6 @@ import Control.Arrow
 import Control.Concurrent
 import Control.Exception (ErrorCall(..), try)
 import Control.Monad
-import Data.Either
 import Test.QuickCheck
 import Test.QuickCheck.Monadic
 
@@ -99,7 +98,10 @@ instance StateModel RegState where
 
   monitoring :: (RegState, RegState) -> Command RegState ThreadId -> Response RegState ThreadId
              -> Property -> Property
-  monitoring (_s, _s') Register {} (Register_ resp) = classify (isLeft resp) (show RegisterFailed)
+  monitoring _s Register   {} (Register_   (Left _))  = classify True (show RegisterFailed)
+  monitoring _s Register   {} (Register_   (Right _)) = classify True (show RegisterSucceeded)
+  monitoring _s Unregister {} (Unregister_ (Left _))  = classify True (show UnregisterFailed)
+  monitoring _s Unregister {} (Unregister_ (Right _)) = classify True (show UnregisterSucceeded)
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"
 
@@ -111,7 +113,7 @@ abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
 allNames :: [String]
 allNames = ["a", "b", "c", "d", "e"]
 
-data Tag = RegisterFailed
+data Tag = RegisterFailed | RegisterSucceeded | UnregisterFailed | UnregisterSucceeded
   deriving Show
 
 prop_registry :: Commands RegState -> Property
