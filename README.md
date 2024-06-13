@@ -2256,6 +2256,22 @@ smaller.
 
 #### Example: process registry
 
+For a slightly more complicated example containing race conditions,
+let's have a look at an implementation of the Erlang process
+registry[^5].
+
+The idea behind Erlang's process registry is that you can spawn threads,
+register the `ThreadId` to some name of type string, and then lookup the
+thread by name rather than its thread id. Threads can also be
+unregistered and killed.
+
+This is useful if threads die and get restarted and register the same
+name, then other threads can easily find the thread id of the new thread
+using the registry.
+
+``` haskell
+```
+
 ``` haskell
 data RegState = RegState
   { tids   :: [Var ThreadId]
@@ -2334,7 +2350,10 @@ instance StateModel RegState where
 
   monitoring :: (RegState, RegState) -> Command RegState ThreadId -> Response RegState ThreadId
              -> Property -> Property
-  monitoring (_s, _s') Register {} (Register_ resp) = classify (isLeft resp) (show RegisterFailed)
+  monitoring _s Register   {} (Register_   (Left _))  = classify True (show RegisterFailed)
+  monitoring _s Register   {} (Register_   (Right _)) = classify True (show RegisterSucceeded)
+  monitoring _s Unregister {} (Unregister_ (Left _))  = classify True (show UnregisterFailed)
+  monitoring _s Unregister {} (Unregister_ (Right _)) = classify True (show UnregisterSucceeded)
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"
 
@@ -2346,7 +2365,7 @@ abstractError (ErrorCallWithLocation msg _loc) = ErrorCall msg
 allNames :: [String]
 allNames = ["a", "b", "c", "d", "e"]
 
-data Tag = RegisterFailed
+data Tag = RegisterFailed | RegisterSucceeded | UnregisterFailed | UnregisterSucceeded
   deriving Show
 
 prop_registry :: Commands RegState -> Property
@@ -2362,6 +2381,31 @@ cleanUp = sequence
   ]
 ```
 
+One new thing to note here is that `WhereIs_` returns the thread id that
+we wanted to look up, but thread ids also happen to be references. The
+way we implemented extending the environment with new references is that
+we call `Data.Foldable.toList` on all responses, which gives us all
+references from the responses. In the `Spawn_` case this does the right
+thing, since spawn returns a reference to the newly spawned thread id,
+but in this case the thread id from `WhereIs_` is not a new reference
+(it's merely a reference to the thread id we wanted to look up), so we
+shouldn't extend the environment with the reference that `WhereIs_`
+returns. We solve this problem with wrapping the response of `WhereIs_`
+in `NonFoldable` which has a `toList` which doesn't return anything.
+
+``` haskell
+newtype NonFoldable a = NonFoldable a
+  deriving stock (Eq, Show)
+
+instance Functor NonFoldable where
+  fmap f (NonFoldable x) = NonFoldable (f x)
+
+instance Foldable NonFoldable where
+  foldMap _f (NonFoldable _x) = mempty
+```
+
+We'll skip showing the real implementat
+
 ``` haskell
 instance ParallelModel RegState where
   runCommandMonad _ = id
@@ -2375,16 +2419,6 @@ prop_parallelRegistry cmds = monadicIO $ do
   assert True
 -- start snippet ParallelRegistry
 ```
-
-This example comes from the paper [*QuickCheck testing for fun and
-profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
-(2007) and is also part of John's Midlands Graduate School course
-(2019).
-
-The parallel tests for the process registry was introduced in [*Finding
-Race Conditions in Erlang with QuickCheck and
-PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
-(2009)
 
 #### Example: key-value store
 
@@ -2594,3 +2628,12 @@ opportunities.
     staying
     sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
     (2014).
+
+[^5]: The sequential variant of the process registry example first
+    appeared in the paper [*QuickCheck testing for fun and
+    profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
+    (2007) and is also part of John's Midlands Graduate School course
+    (2019). The parallel tests were introduced in [*Finding Race
+    Conditions in Erlang with QuickCheck and
+    PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
+    (2009).
