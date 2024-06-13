@@ -96,14 +96,19 @@ instance StateModel RegState where
   runReal (Unregister name)   = Unregister_ <$> fmap (left abstractError) (try (unregister name))
   runReal (Kill tid)          = Kill_       <$> kill tid
 
-  monitoring :: (RegState, RegState) -> Command RegState ThreadId -> Response RegState ThreadId
-             -> Property -> Property
-  monitoring _s Register   {} (Register_   (Left _))  = classify True (show RegisterFailed)
-  monitoring _s Register   {} (Register_   (Right _)) = classify True (show RegisterSucceeded)
-  monitoring _s Unregister {} (Unregister_ (Left _))  = classify True (show UnregisterFailed)
-  monitoring _s Unregister {} (Unregister_ (Right _)) = classify True (show UnregisterSucceeded)
-  monitoring (_s, s') _cmd _resp =
-    counterexample $ "\n    State: " ++ show s' ++ "\n"
+  monitoring :: (RegState, RegState) -> Command RegState ThreadId
+             -> Response RegState ThreadId -> Property -> Property
+  monitoring (_s, s') cmd resp =
+    let
+      aux tag = classify True (show tag)
+              . counterexample ("\n    State: " ++ show s' ++ "\n")
+    in
+      case (cmd, resp) of
+        (Register   {}, Register_   (Left _))  -> aux RegisterFailed
+        (Register   {}, Register_   (Right _)) -> aux RegisterSucceeded
+        (Unregister {}, Unregister_ (Left _))  -> aux UnregisterFailed
+        (Unregister {}, Unregister_ (Right _)) -> aux UnregisterSucceeded
+        _otherwise -> counterexample $ "\n    State: " ++ show s' ++ "\n"
 
 -- Throws away the location information from the error, so that it matches up
 -- with the fake.
@@ -118,8 +123,8 @@ data Tag = RegisterFailed | RegisterSucceeded | UnregisterFailed | UnregisterSuc
 
 prop_registry :: Commands RegState -> Property
 prop_registry cmds = monadicIO $ do
-  runCommands cmds
   void (run cleanUp)
+  runCommands cmds
   assert True
 
 cleanUp :: IO [Either ErrorCall ()]
@@ -135,9 +140,8 @@ instance ParallelModel RegState where
 
 prop_parallelRegistry :: ParallelCommands RegState -> Property
 prop_parallelRegistry cmds = monadicIO $ do
-  void (run cleanUp)
   replicateM_ 10 $ do
-    runParallelCommands cmds
     void (run cleanUp)
+    runParallelCommands cmds
   assert True
 -- start snippet ParallelRegistry

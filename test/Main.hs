@@ -26,7 +26,7 @@ tests = testGroup "Tests"
   , testProperty "DieHard" (expectFailure prop_dieHard)
   , sequentialTestGroup "Registry" AllSucceed
       [ testProperty "Sequential" prop_registry
-      , testProperty "Parallel" prop_parallelRegistry
+      , testProperty "Parallel" (expectFailure prop_parallelRegistry)
       ]
   , testGroup "TicketDispenser"
       [ testProperty "Sequential" prop_ticketDispenser

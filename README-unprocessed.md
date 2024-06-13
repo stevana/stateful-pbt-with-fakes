@@ -1832,7 +1832,7 @@ This is useful if threads die and get restarted and register the same name, then
 other threads can easily find the thread id of the new thread using the
 registry.
 
-```{.haskell include=src/Example/Registry/Real.hs snippet=Registry}
+```{.haskell include=src/Example/Registry/Real.hs snippet=RegistryRealRace}
 ```
 
 ```{.haskell include=src/Example/Registry/Test.hs snippet=Registry}
@@ -1852,10 +1852,139 @@ that `WhereIs_` returns. We solve this problem with wrapping the response of
 ```{.haskell include=src/Stateful.hs snippet=NonFoldable}
 ```
 
-We'll skip showing the real implementat
+The above passes the sequential tests and we can see that we got good coverage
+of failing commands as well:
+
+      +++ OK, passed 100 tests:
+      83% Spawn
+      82% WhereIs
+      79% Unregister
+      78% UnregisterFailed
+      70% Kill
+      70% Register
+      62% RegisterFailed
+      59% RegisterSucceeded
+      29% UnregisterSucceeded
+
+To make sure everything works as expected, let's introduce a bug on purpose:
+
+```diff
+  register :: String -> ThreadId -> IO ()
+  register name tid = do
+    ok <- alive tid
+    reg <- readRegistry
+    if ok && name `notElem` map fst reg && tid `notElem` map snd reg
+      then atomicModifyIORef' registry $ \reg' ->
+             if name `notElem` map fst reg' && tid `notElem` map snd reg'
+-              then ((name,tid):reg',())
++              then ([(name,tid)],())
+               else (reg',badarg)
+      else badarg
+
+```
+
+If we rerun the tests with this bug in place, we get test failures like the
+following:
+
+```
+     *** Failed! Assertion failed (after 30 tests and 7 shrinks):
+      Commands {unCommands = [Spawn,Spawn,Register "e" (Var 1),Register "d" (Var 0),Unregister "e"]}
+      Spawn --> Spawn_ (ThreadId 154)
+
+          State: RegState {tids = [Var 0], regs = [], killed = []}
+
+      Spawn --> Spawn_ (ThreadId 155)
+
+          State: RegState {tids = [Var 0,Var 1], regs = [], killed = []}
+
+      Register "e" (Var 1) --> Register_ (Right ())
+
+          State: RegState {tids = [Var 0,Var 1], regs = [("e",Var 1)], killed = []}
+
+      Register "d" (Var 0) --> Register_ (Right ())
+
+          State: RegState {tids = [Var 0,Var 1], regs = [("d",Var 0),("e",Var 1)], killed = []}
+
+      Unregister "e" --> Unregister_ (Left bad argument)
+
+          State: RegState {tids = [Var 0,Var 1], regs = [("d",Var 0)], killed = []}
+
+      Expected: Unregister_ (Right ())
+      Got: Unregister_ (Left bad argument)
+```
+
+As we can see unregister fails, when it in fact so should succeed (we've
+registered `"e"` so we should be allowed to unregister it, but the real
+implementation has due to the bug forgot that the registration happened).
+
+Let's move on to the parallel tests, all we need to add is:
+
 
 ```{.haskell include=src/Example/Registry/Test.hs snippet=ParallelRegistry}
 ```
+
+When we run the tests we get rather long counterexamples:
+
+```
+      *** Failed! (after 24 tests and 7 shrinks):
+      Exception:
+        bad argument
+        CallStack (from HasCallStack):
+          error, called at src/Example/Registry/Real.hs:69:10 in stateful-pbt-with-fakes-0.0.0-inplace:Example.Registry.Real
+      ParallelCommands [Fork [Spawn,WhereIs "a"],Fork [Spawn],Fork [Register "c" (Var 1),Spawn],Fork [Register "e" (Var 2),Register "a" (Var 2)]]
+```
+
+But if we replace our shared memory operations with version that do a bit of
+sleep beforehand:
+
+```diff
+- import Data.IORef
++ import SleepyIORef
+```
+
+We get better shrinking results:
+
+```
+      *** Failed! (after 5 tests and 5 shrinks):
+      Exception:
+        bad argument
+        CallStack (from HasCallStack):
+          error, called at src/Example/Registry/Real.hs:69:10 in stateful-pbt-with-fakes-0.0.0-inplace:Example.Registry.Real
+      ParallelCommands [Fork [Spawn],Fork [Register "b" (Var 0),Register "c" (Var 0)]]
+```
+
+Here we see clearly that there's some problem in `Register`, as that's the only
+thing that happens in parallel. If we look at the implementation of `register`
+it's obvious where the race condition is, for example we are using
+`atomicModifyIORef` to update the registry. The problem is that we call
+`readRegistry` to check if a name has already been registered and then call
+`atomicModifyIORef`, so the race can be if another thread sneaks in between
+those two calls.
+
+We can fix this problem by adding a global lock around `register`:
+
+```{.haskell include=src/Example/Registry/Real.hs snippet=registerNoRace}
+```
+
+When rerunning the tests with this fixed version of `registry`, we get:
+
+```
+      *** Failed! Assertion failed (after 30 tests and 13 shrinks):
+      ParallelCommands [Fork [Spawn],Fork [Spawn],Fork [Spawn],
+                        Fork [Register "d" (Var 2)],Fork [Unregister "d",Unregister "d"]]
+```
+
+Which seems to suggest that we have a similar problem with `unregister`, which
+is indeed the case. After applying the same fix to `unregister`, we get:
+
+```
+      *** Failed! Assertion failed (after 15 tests and 4 shrinks):
+      ParallelCommands [Fork [Spawn],Fork [Register "d" (Var 0)],
+                        Fork [Kill (Var 0),Register "e" (Var 0)]]
+```
+
+Killing a thread will unregister it, so we get a similar problem again. If we
+take the lock before calling `kill`, then the parallel tests finally pass.
 
 #### Example: key-value store
 

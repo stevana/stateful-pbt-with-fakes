@@ -38,6 +38,7 @@ library
     Example.TicketDispenser
     Opaque
     Parallel
+    SleepyIORef
     Stateful
 
   build-depends:
