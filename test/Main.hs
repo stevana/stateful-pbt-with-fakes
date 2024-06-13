@@ -9,6 +9,7 @@ import Example.DieHard
 import Example.TicketDispenser
 import Example.Registry.Test
 import Example.FileSystem.Test
+import Example.KeyValueStore.Test
 
 ------------------------------------------------------------------------
 
@@ -32,4 +33,8 @@ tests = testGroup "Tests"
       , testProperty "Parallel" (expectFailure prop_parallelTicketDispenser)
       ]
   , testProperty "FileSystem" prop_fileSystem
+  , testGroup "KeyValueStore"
+      [ testProperty "Sequential" prop_keyValueStore
+      , testProperty "Parallel"   prop_parallelKeyValueStore
+      ]
   ]
