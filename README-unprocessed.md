@@ -2012,7 +2012,7 @@ first to propose the use of fakes instead of state machine specifications with
 post-conditions. Edsko also showed how one can implement fake-based
 specifications on top of a library that uses state machine specifications.
 
-Post-conditions are more general than fakes? Relational vs functional?
+XXX: Post-conditions are more general than fakes? Relational vs functional?
 
 Fake instead of state machine spec is not only easier for programmers
 unfamilar with formal specification
@@ -2022,38 +2022,77 @@ fake in integration tests with components that depend on the software that we
 tested with the fake.
 
 One of the problems with integration testing against fakes is that the fake can
-be wrong. The standard solution to solve that problem is to
-[contract](https://martinfowler.com/bliki/ContractTest.html)
-[test](https://www.youtube.com/watch?v=fhFa4tkFUFw) the fake to make sure that
-it is faithful to the software it's supposed to be a fake of. We don't have this
-problem, because our tests assure that the fake is faithful.
+be wrong. The standard solution to solve that problem is to [contract
+test](https://martinfowler.com/bliki/ContractTest.html) the fake to make sure
+that it is faithful to the software it's supposed to be a fake of. We don't have
+this problem, because our tests assure that the fake is faithful.
 
 This, final, section is about unpacking and giving examples of how integration
 testing against fakes works.
 
 #### Example: queue (again)
 
+```{.haskell include=src/Example/Queue/Interface.hs snippet=IQueue}
+```
+
+```{.haskell include=src/Example/Queue/Interface.hs snippet=real}
+```
+
+```{.haskell include=src/Example/Queue/Interface.hs snippet=fake}
+```
+
+```{.haskell include=src/Example/Queue/Interface.hs snippet=prog}
+```
+
 #### Example: file system
 
 + proper coverage?
 
-#### Example: bigger system of components?
+#### Example: bigger system of components
 
-* A queue and a file system might not seem necessary to fake (unless we consider fault-injection)
+The examples given above, a queue and a file system, might not seems necessary
+to fake[^6] so to finish of let's sketch how the same technique scales to a
+bigger system of components or services.
 
-```haskell
+Imagine we have three components or services, where component *A* depends on
+component *B* which depends on component *C*:
 
-data IServiceA = ...
-data IServiceB = ...
-data IServiceC = ...
+```
+  +---+      +---+      +---+
+  |   |      |   |      |   |
+  | A +----->| B +----->| C |
+  |   |      |   |      |   |
+  +---+      +---+      +---+
 
-iServiceB :: IServiceC -> IO IServiceB
-iServiceA :: IServiceB -> IO IServiceA
 ```
 
-* Stateful and parallel test C, this gives us a fake of C which is contract tested
-* Use C fake when integration testing B
-* Use B fake (which uses the C fake) when testing A
+Following the pattern that we did for the queue and file system example, we'd
+define three interfaces:
+
+
+```haskell
+data IA = ...
+data IB = ...
+data IC = ...
+```
+
+And the dependencies are made clear when we instantiate the interfaces:
+
+```haskell
+iC :: IO IC       -- C has no dependencies.
+iB :: IC -> IO IB -- B depends on C.
+iA :: IB -> IO IA -- A depends on B.
+```
+
+The testing strategy is then as follows:
+
+1. Stateful and parallel test C, this gives us a fake of C which is contract
+   tested;
+2. Use C fake when integration testing B;
+3. Use B fake (which uses the C fake) when testing A.
+
+Hopefully it should be clear that this strategy scales to more components or
+services[^7].
 
 ### Prior work
 
@@ -2203,3 +2242,17 @@ formal proof part, we should cherish such eduction opportunities.
     with QuickCheck and
     PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
     (2009).
+
+[^6]: Unless we want to test what happens when failures, such as the disk being
+    full etc.
+    [Research](http://www.eecg.toronto.edu/~yuan/papers/failure_analysis_osdi14.pdf)
+    shows that "almost all (92%) of the catastrophic system failures are the
+    result of incorrect handling of non-fatal errors explicitly signaled in
+    software. [...] in 58% of the catastrophic failures, the underlying faults
+    could easily have been detected through simple testing of error handling
+    code.". Fakes make it easier to inject faults, but that's a story for
+    another day.
+
+[^7]: See the talk [Integrated Tests Are A
+    Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger for a
+    longer presentation of this idea.
