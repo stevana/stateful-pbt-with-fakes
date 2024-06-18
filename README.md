@@ -2628,27 +2628,39 @@ finally pass.
 
 ### Integration testing with contract tested fakes
 
-- Vanilla property-based testing generates unit tests, what about
-  stateful and parallel property-based testing?
+Throughout this post we've used in-memory models, or fakes, as reference
+implementations to test against.
 
-- Fake instead of state machine spec is not only easier for programmers
-  unfamilar with formal specification, it's also more useful in that the
-  fake can be used in integration tests with components that depend on
-  the SUT
+The use of fakes diverges from the original work on Erlang QuickCheck,
+where a more traditional state machine specification is used with
+post-conditions.
 
-- let this be your prototype
+As far as I know, Edsko de Vries'
+[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019) was
+the first to propose the use of fakes instead of state machine
+specifications with post-conditions. Edsko also showed how one can
+implement fake-based specifications on top of a library that uses state
+machine specifications.
 
-- <https://martinfowler.com/bliki/ContractTest.html>
+Post-conditions are more general than fakes? Relational vs functional?
 
-- Edsko's lockstep
-  <https://www.well-typed.com/blog/2019/01/qsm-in-depth/>
+Fake instead of state machine spec is not only easier for programmers
+unfamilar with formal specification
 
-- [Integrated Tests Are A
-  Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger
+But there are other advantages to having a fake, for example we can use
+this fake in integration tests with components that depend on the
+software that we tested with the fake.
 
-#### Motivation
+One of the problems with integration testing against fakes is that the
+fake can be wrong. The standard solution to solve that problem is to
+[contract](https://martinfowler.com/bliki/ContractTest.html)
+[test](https://www.youtube.com/watch?v=fhFa4tkFUFw) the fake to make
+sure that it is faithful to the software it's supposed to be a fake of.
+We don't have this problem, because our tests assure that the fake is
+faithful.
 
-#### How it works
+This, final, section is about unpacking and giving examples of how
+integration testing against fakes works.
 
 #### Example: queue (again)
 
