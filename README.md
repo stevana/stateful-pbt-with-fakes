@@ -2664,6 +2664,10 @@ integration testing against fakes works.
 
 #### Example: queue (again)
 
+As our first example of integration testing, let's recall our queue
+example from the section on stateful testing. We can introduce an
+interface for it as follows:
+
 ``` haskell
 data IQueue q = IQueue
   { iNew  :: Int -> IO q
@@ -2672,6 +2676,9 @@ data IQueue q = IQueue
   , iSize :: q -> IO Int
   }
 ```
+
+The real implementation can instantiate this interface in a
+straightforward way:
 
 ``` haskell
 real :: IQueue Queue
@@ -2682,6 +2689,10 @@ real = IQueue
   , iSize = size
   }
 ```
+
+The interesting part is that our fake can also instantiate the same
+interface by storing the state in a mutable reference (`IORef`) as
+follows.
 
 ``` haskell
 fake :: IO (IQueue (Var Queue))
@@ -2704,6 +2715,8 @@ fake = do
         assoc _fs (Right (fs', x)) = (fs', Right x)
 ```
 
+We can now write components or services *against* this interface:
+
 ``` haskell
 prog :: IQueue q -> IO ()
 prog iq = do
@@ -2715,7 +2728,18 @@ prog iq = do
   assert (x == 0) (return ())
   sz <- iSize iq q
   assert (sz == 2) (return ())
+
+test :: IO ()
+test = prog =<< fake
+
+deploy :: IO ()
+deploy = prog real
 ```
+
+When we integration test our new component we can use the `fake`
+instance to make the tests fast and determinstic, while when we deploy
+we use the `real` instance and because of our stateful property-based
+tests we know that the fake is faithful to the real implementaton.
 
 #### Example: file system
 

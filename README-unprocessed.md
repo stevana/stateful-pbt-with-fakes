@@ -2032,17 +2032,33 @@ testing against fakes works.
 
 #### Example: queue (again)
 
+As our first example of integration testing, let's recall our queue example from
+the section on stateful testing. We can introduce an interface for it as
+follows:
+
 ```{.haskell include=src/Example/Queue/Interface.hs snippet=IQueue}
 ```
+
+The real implementation can instantiate this interface in a straightforward way:
 
 ```{.haskell include=src/Example/Queue/Interface.hs snippet=real}
 ```
 
+The interesting part is that our fake can also instantiate the same interface by
+storing the state in a mutable reference (`IORef`) as follows.
+
 ```{.haskell include=src/Example/Queue/Interface.hs snippet=fake}
 ```
 
+We can now write components or services *against* this interface:
+
 ```{.haskell include=src/Example/Queue/Interface.hs snippet=prog}
 ```
+
+When we integration test our new component we can use the `fake` instance to
+make the tests fast and determinstic, while when we deploy we use the `real`
+instance and because of our stateful property-based tests we know that the fake
+is faithful to the real implementaton.
 
 #### Example: file system
 

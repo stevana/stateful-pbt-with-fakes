@@ -62,10 +62,10 @@ prog iq = do
   assert (x == 0) (return ())
   sz <- iSize iq q
   assert (sz == 2) (return ())
+
+test :: IO ()
+test = prog =<< fake
+
+deploy :: IO ()
+deploy = prog real
 -- end snippet prog
-
-unit_real :: IO ()
-unit_real = prog real
-
-unit_fake :: IO ()
-unit_fake = prog =<< fake
