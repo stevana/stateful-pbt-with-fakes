@@ -2036,8 +2036,9 @@ runParallelCommands cmds0@(ParallelCommands forks0) = do
   c   <- liftIO newAtomicCounter
   env <- liftIO (runForks q c emptyEnv forks0)
   hist <- History <$> liftIO (atomically (flushTQueue q))
-  monitor (counterexample (show hist))
-  assert (linearisable env (interleavings hist))
+  let ok = linearisable env (interleavings hist)
+  unless ok (monitor (counterexample (show hist)))
+  assert ok
   where
     runForks :: TQueue (Event state) -> AtomicCounter -> Env state -> [Fork state]
              -> IO (Env state)
@@ -2260,6 +2261,8 @@ For a slightly more complicated example containing race conditions,
 let's have a look at an implementation of the Erlang process
 registry[^5].
 
+##### Software under test
+
 The idea behind Erlang's process registry is that you can spawn threads,
 register the `ThreadId` to some name of type string, and then lookup the
 thread by name rather than its thread id. Threads can also be
@@ -2334,6 +2337,8 @@ kill tid = do
       else return ()
 ```
 
+##### Model
+
 ``` haskell
 data RegState = RegState
   { tids   :: [Var ThreadId]
@@ -2406,9 +2411,9 @@ instance StateModel RegState where
   runReal :: Command RegState ThreadId -> IO (Response RegState ThreadId)
   runReal Spawn               = Spawn_      <$> spawn
   runReal (WhereIs name)      = WhereIs_ . NonFoldable <$> whereis name
-  runReal (Register name tid) = Register_   <$> fmap (left abstractError) (try (registerNoRace name tid))
-  runReal (Unregister name)   = Unregister_ <$> fmap (left abstractError) (try (unregisterNoRace name))
-  runReal (Kill tid)          = Kill_       <$> killNoRace tid
+  runReal (Register name tid) = Register_   <$> fmap (left abstractError) (try (register name tid))
+  runReal (Unregister name)   = Unregister_ <$> fmap (left abstractError) (try (unregister name))
+  runReal (Kill tid)          = Kill_       <$> kill tid
 
   monitoring :: (RegState, RegState) -> Command RegState ThreadId
              -> Response RegState ThreadId -> Property -> Property
@@ -2470,6 +2475,8 @@ instance Functor NonFoldable where
 instance Foldable NonFoldable where
   foldMap _f (NonFoldable _x) = mempty
 ```
+
+###### Testing
 
 The above passes the sequential tests and we can see that we got good
 coverage of failing commands as well:
@@ -2543,10 +2550,9 @@ instance ParallelModel RegState where
 
 prop_parallelRegistry :: ParallelCommands RegState -> Property
 prop_parallelRegistry cmds = monadicIO $ do
-  void (run cleanUp)
   replicateM_ 10 $ do
-    runParallelCommands cmds
     void (run cleanUp)
+    runParallelCommands cmds
   assert True
 -- start snippet ParallelRegistry
 ```
@@ -2558,7 +2564,8 @@ When we run the tests we get rather long counterexamples:
             bad argument
             CallStack (from HasCallStack):
               error, called at src/Example/Registry/Real.hs:69:10 in stateful-pbt-with-fakes-0.0.0-inplace:Example.Registry.Real
-          ParallelCommands [Fork [Spawn,WhereIs "a"],Fork [Spawn],Fork [Register "c" (Var 1),Spawn],Fork [Register "e" (Var 2),Register "a" (Var 2)]]
+          ParallelCommands [Fork [Spawn,WhereIs "a"],Fork [Spawn],
+                            Fork [Register "c" (Var 1),Spawn],Fork [Register "e" (Var 2),Register "a" (Var 2)]]
 
 But if we replace our shared memory operations with version that do a
 bit of sleep beforehand:
