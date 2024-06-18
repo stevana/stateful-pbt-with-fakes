@@ -1824,6 +1824,8 @@ introduction of sleep is only needed to make the counterexample smaller.
 For a slightly more complicated example containing race conditions, let's have a
 look at an implementation of the Erlang process registry[^5].
 
+##### Software under test
+
 The idea behind Erlang's process registry is that you can spawn threads,
 register the `ThreadId` to some name of type string, and then lookup the thread
 by name rather than its thread id. Threads can also be unregistered and killed.
@@ -1834,6 +1836,8 @@ registry.
 
 ```{.haskell include=src/Example/Registry/Real.hs snippet=RegistryRealRace}
 ```
+
+##### Model
 
 ```{.haskell include=src/Example/Registry/Test.hs snippet=Registry}
 ```
@@ -1851,6 +1855,8 @@ that `WhereIs_` returns. We solve this problem with wrapping the response of
 
 ```{.haskell include=src/Stateful.hs snippet=NonFoldable}
 ```
+
+###### Testing
 
 The above passes the sequential tests and we can see that we got good coverage
 of failing commands as well:
@@ -1931,7 +1937,8 @@ When we run the tests we get rather long counterexamples:
         bad argument
         CallStack (from HasCallStack):
           error, called at src/Example/Registry/Real.hs:69:10 in stateful-pbt-with-fakes-0.0.0-inplace:Example.Registry.Real
-      ParallelCommands [Fork [Spawn,WhereIs "a"],Fork [Spawn],Fork [Register "c" (Var 1),Spawn],Fork [Register "e" (Var 2),Register "a" (Var 2)]]
+      ParallelCommands [Fork [Spawn,WhereIs "a"],Fork [Spawn],
+                        Fork [Register "c" (Var 1),Spawn],Fork [Register "e" (Var 2),Register "a" (Var 2)]]
 ```
 
 But if we replace our shared memory operations with version that do a bit of

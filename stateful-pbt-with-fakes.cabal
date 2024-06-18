@@ -22,6 +22,8 @@ library
   import:           warnings
   exposed-modules:
     Example.Counter
+    Example.CRUD.Real
+    Example.CRUD.Test
     Example.DieHard
     Example.FileSystem.Fake
     Example.FileSystem.Interface

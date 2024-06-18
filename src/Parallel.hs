@@ -14,7 +14,8 @@ module Parallel where
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad.IO.Class
+import Control.Monad
+import Control.Monad.IO.Class (liftIO)
 import Data.Coerce
 import Data.Containers.ListUtils (nubOrd)
 import Data.Foldable
@@ -285,8 +286,9 @@ runParallelCommands cmds0@(ParallelCommands forks0) = do
   c   <- liftIO newAtomicCounter
   env <- liftIO (runForks q c emptyEnv forks0)
   hist <- History <$> liftIO (atomically (flushTQueue q))
-  monitor (counterexample (show hist))
-  assert (linearisable env (interleavings hist))
+  let ok = linearisable env (interleavings hist)
+  unless ok (monitor (counterexample (show hist)))
+  assert ok
   where
     runForks :: TQueue (Event state) -> AtomicCounter -> Env state -> [Fork state]
              -> IO (Env state)

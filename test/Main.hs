@@ -10,6 +10,7 @@ import Example.TicketDispenser
 import Example.Registry.Test
 import Example.FileSystem.Test
 import Example.KeyValueStore.Test
+import Example.CRUD.Test
 
 ------------------------------------------------------------------------
 
@@ -36,5 +37,9 @@ tests = testGroup "Tests"
   , testGroup "KeyValueStore"
       [ testProperty "Sequential" prop_keyValueStore
       , testProperty "Parallel"   prop_parallelKeyValueStore
+      ]
+  , sequentialTestGroup "CRUD" AllSucceed
+      [ testProperty "Sequential" prop_crud
+      , testProperty "Parallel"   prop_parallelCrud
       ]
   ]
