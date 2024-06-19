@@ -2113,6 +2113,16 @@ implementation and we need to investigate how it slipped through our stateful
 property-based
 [tests](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs).
 
+Note that `prog` is just a silly example, in a real system the component that
+uses the file system can be more complex, for example in the system that Edsko
+worked on the component that depended on the file system is a database. In such
+cases it makes sense to write a whole new stateful and parallel property-based
+test suite using database commands and responses, it's those tests that do the
+integration testing between the database and the fake filesystem, while the
+stateful and parallel property-based tests of the filesystem alone do the
+contract tests that ensure that the file system fake is faithful to the real
+file system.
+
 #### Example: bigger system of components
 
 The examples given above, a queue and a file system, might not seems necessary
