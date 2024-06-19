@@ -1457,7 +1457,7 @@ correct way to do it:
 
 With this final tweak, the property passes. I hope that this somewhat
 long example gives you a feel for how property-based testing drives the
-development and debugging of code.
+development and debugging of the code.
 
 #### Example: jug puzzle from Die Hard 3
 
@@ -1496,7 +1496,7 @@ instance StateModel Model where
     | EmptySmall
     | SmallIntoBig
     | BigIntoSmall
-    deriving (Show, Enum, Bounded, Functor)
+    deriving (Show, Enum, Bounded, Functor, Foldable)
 
   data Response Model r = Done | BigJugIs4
     deriving (Eq, Show, Functor, Foldable)
@@ -1526,8 +1526,6 @@ instance StateModel Model where
              -> Property -> Property
   monitoring (_s, s') _cmd _resp =
     counterexample $ "\n    State: " ++ show s' ++ "\n"
-
-  runCommandMonad _s = id
 
 done :: Model -> Either void (Model, Response Model ref)
 done s' | bigJug s' == 4 = return (s', BigJugIs4)

@@ -14,6 +14,7 @@ import Stateful
 
 ------------------------------------------------------------------------
 
+-- start snippet DieHard
 data Model = Model
   { bigJug   :: Int
   , smallJug :: Int
@@ -72,3 +73,4 @@ prop_dieHard :: Commands Model -> Property
 prop_dieHard cmds = withMaxSuccess 10000 $ monadicIO $ do
   runCommands cmds
   assert True
+-- end snippet DieHard

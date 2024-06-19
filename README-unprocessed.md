@@ -1281,7 +1281,7 @@ queues of size `1`), the following is the correct way to do it:
 
 With this final tweak, the property passes. I hope that this somewhat long
 example gives you a feel for how property-based testing drives the development
-and debugging of code.
+and debugging of the code.
 
 #### Example: jug puzzle from Die Hard 3
 
@@ -1299,67 +1299,7 @@ then throw an exception when the big jug contains 4L. This will fail the test
 and output the shrunk sequence of actions that resulted in the failure, giving
 us the solution to the puzzle.
 
-```haskell
-data Model = Model
-  { bigJug   :: Int
-  , smallJug :: Int
-  }
-  deriving (Eq, Show)
-
-instance StateModel Model where
-
-  initialState = Model 0 0
-
-  type Reference Model = Void
-
-  data Command Model r
-    = FillBig
-    | FillSmall
-    | EmptyBig
-    | EmptySmall
-    | SmallIntoBig
-    | BigIntoSmall
-    deriving (Show, Enum, Bounded, Functor)
-
-  data Response Model r = Done | BigJugIs4
-    deriving (Eq, Show, Functor, Foldable)
-
-  generateCommand :: Model -> Gen (Command Model r)
-  generateCommand _s = elements [minBound ..]
-
-  runFake :: Command Model r -> Model -> Either void (Model, Response Model r)
-  runFake FillBig      s = done s { bigJug   = 5 }
-  runFake FillSmall    s = done s { smallJug = 3 }
-  runFake EmptyBig     s = done s { bigJug   = 0 }
-  runFake EmptySmall   s = done s { smallJug = 0 }
-  runFake SmallIntoBig (Model big small) =
-    let big' = min 5 (big + small) in
-    done (Model { bigJug = big'
-                , smallJug = small - (big' - big) })
-  runFake BigIntoSmall (Model big small) =
-    let small' = min 3 (big + small) in
-    done (Model { bigJug = big - (small' - small)
-                , smallJug = small'
-                })
-
-  runReal :: Command Model Void -> IO (Response Model (Reference Model))
-  runReal _cmd = return Done
-
-  monitoring :: (Model, Model) -> Command Model Void -> Response Model Void
-             -> Property -> Property
-  monitoring (_s, s') _cmd _resp =
-    counterexample $ "\n    State: " ++ show s' ++ "\n"
-
-  runCommandMonad _s = id
-
-done :: Model -> Either void (Model, Response Model ref)
-done s' | bigJug s' == 4 = return (s', BigJugIs4)
-        | otherwise      = return (s', Done)
-
-prop_dieHard :: Commands Model -> Property
-prop_dieHard cmds = withMaxSuccess 10000 $ monadicIO $ do
-  runCommands cmds
-  assert True
+```{.haskell include=src/Example/DieHard.hs snippet=DieHard}
 ```
 
 When we run `quickcheck prop_dieHard` we get the following output:
