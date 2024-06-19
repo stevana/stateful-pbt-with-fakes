@@ -2743,12 +2743,27 @@ tests we know that the fake is faithful to the real implementaton.
 
 #### Example: file system
 
-Edsko de Vries'
-[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
+The next example is a file system, first used by Edsko de Vries in the
+[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019)
+that also introduced using fakes as models.
 
-See the [test
-module](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs)
-for details of how the stateful property-based tests are written.
+The interface is parametrised by a file handle. We can create
+directories, open files to get a hold of a file handle, file handles can
+then be read from and written to, and finally closed:
+
+``` haskell
+data IFileSystem h = IFileSystem
+  { iMkDir :: Dir -> IO ()
+  , iOpen  :: File -> IO h
+  , iWrite :: h -> String -> IO ()
+  , iClose :: h -> IO ()
+  , iRead  :: File -> IO String
+  }
+```
+
+The real implementation of this interface uses the real file system. In
+order to isolate the tests all operations will be relative to some
+`root` directory:
 
 ``` haskell
 root :: FilePath
@@ -2769,6 +2784,20 @@ rClose h = hClose h
 rRead :: File -> IO String
 rRead f = readFile (fileFP root f)
 ```
+
+``` haskell
+real :: IFileSystem Handle
+real = IFileSystem
+  { iMkDir = rMkDir
+  , iOpen  = rOpen
+  , iWrite = rWrite
+  , iClose = rClose
+  , iRead  = rRead
+  }
+```
+
+The fake implementation of the interface is, as usual, implemented using
+an in-memory datastructure:
 
 ``` haskell
 type FHandle = Var Handle
@@ -2824,27 +2853,6 @@ fRead f m@(F _ fs hs _)
 ```
 
 ``` haskell
-data IFileSystem h = IFileSystem
-  { iMkDir :: Dir -> IO ()
-  , iOpen  :: File -> IO h
-  , iWrite :: h -> String -> IO ()
-  , iClose :: h -> IO ()
-  , iRead  :: File -> IO String
-  }
-```
-
-``` haskell
-real :: IFileSystem Handle
-real = IFileSystem
-  { iMkDir = rMkDir
-  , iOpen  = rOpen
-  , iWrite = rWrite
-  , iClose = rClose
-  , iRead  = rRead
-  }
-```
-
-``` haskell
 fake :: IO (IFileSystem FHandle)
 fake = do
   ref <- newIORef emptyFakeFS
@@ -2865,6 +2873,10 @@ fake = do
         swap (x, y) = (y, x)
 ```
 
+Assuming we've tested that the fake file system is faithful to the real
+one, we can depend on the interface in all components of our system that
+need the file system:
+
 ``` haskell
 prog :: IFileSystem h -> IO ()
 prog ifs = do
@@ -2875,13 +2887,27 @@ prog ifs = do
   iWrite ifs h "baz"
   iClose ifs h
   putStrLn =<< iRead ifs f
+```
 
+We can then use the fake filesystem when we integration test and thus
+get fast and deterministic tests, and then use the real filesystem when
+we deploy.
+
+``` haskell
 test :: IO ()
 test = prog =<< fake
 
 deploy :: IO ()
 deploy = prog real
 ```
+
+Because of the fact that we know that the fake is faithful to the real
+file system implementation, we can be relatively sure that swapping in
+the real file system instead of the fake one when deploying will not
+introduce bugs. If it does introduce a bug then we have a mismatch
+between the fake and the real implementation and we need to investigate
+how it slipped through our stateful property-based
+[tests](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs).
 
 #### Example: bigger system of components
 
