@@ -18,6 +18,7 @@ import Stateful
 
 ------------------------------------------------------------------------
 
+-- begin snippet QueueStateModel
 instance StateModel State where
 
   initialState = Map.empty
@@ -62,10 +63,13 @@ instance StateModel State where
   runFake (Get q)   s = fmap Get_  <$> fGet q s
   runFake (Size q)  s = fmap Size_ <$> fSize q s
 
+  -- Here `new`, `put`, `get` and `size` are FFI wrappers for their respective C
+  -- functions.
   runReal (New sz)  = New_  <$> new sz
   runReal (Put q i) = Put_  <$> put q i
   runReal (Get q)   = Get_  <$> get q
   runReal (Size q)  = Size_ <$> size q
+-- end snippet QueueStateModel
 
 prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do
