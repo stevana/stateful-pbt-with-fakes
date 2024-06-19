@@ -1880,11 +1880,6 @@ is indeed the case. After applying the same fix to `unregister`, we get:
 Killing a thread will unregister it, so we get a similar problem again. If we
 take the lock before calling `kill`, then the parallel tests finally pass.
 
-#### Example: key-value store
-
-* change so it has a create command which creates a new ref?
-* coverage to confirm
-
 ### Integration testing with contract tested fakes
 
 Throughout this post we've used in-memory models, or fakes, as reference
