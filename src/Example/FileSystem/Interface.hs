@@ -67,10 +67,12 @@ prog ifs = do
   iWrite ifs h "baz"
   iClose ifs h
   putStrLn =<< iRead ifs f
+-- end snippet prog
 
+-- start snippet testDeploy
 test :: IO ()
 test = prog =<< fake
 
 deploy :: IO ()
 deploy = prog real
--- end snippet prog
+-- end snippet testDeploy

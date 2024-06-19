@@ -2062,31 +2062,56 @@ is faithful to the real implementaton.
 
 #### Example: file system
 
-Edsko de Vries' [post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/)
-(2019).
+The next example is a file system, first used by Edsko de Vries in the
+[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019) that also
+introduced using fakes as models.
 
-See the [test
-module](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs)
-for details of how the stateful property-based tests are written.
+The interface is parametrised by a file handle. We can create directories, open
+files to get a hold of a file handle, file handles can then be read from and
+written to, and finally closed:
+
+```{.haskell include=src/Example/FileSystem/Interface.hs snippet=IFileSystem}
+```
+
+The real implementation of this interface uses the real file system. In order to
+isolate the tests all operations will be relative to some `root` directory:
 
 
 ```{.haskell include=src/Example/FileSystem/Real.hs snippet=FileSystemReal}
 ```
 
-```{.haskell include=src/Example/FileSystem/Fake.hs snippet=FileSystemFake}
-```
-
-```{.haskell include=src/Example/FileSystem/Interface.hs snippet=IFileSystem}
-```
-
 ```{.haskell include=src/Example/FileSystem/Interface.hs snippet=real}
+```
+
+The fake implementation of the interface is, as usual, implemented using an
+in-memory datastructure:
+
+```{.haskell include=src/Example/FileSystem/Fake.hs snippet=FileSystemFake}
 ```
 
 ```{.haskell include=src/Example/FileSystem/Interface.hs snippet=fake}
 ```
 
+Assuming we've tested that the fake file system is faithful to the real one, we
+can depend on the interface in all components of our system that need the file
+system:
+
 ```{.haskell include=src/Example/FileSystem/Interface.hs snippet=prog}
 ```
+
+We can then use the fake filesystem when we integration test and thus get fast
+and deterministic tests, and then use the real filesystem when we deploy.
+
+```{.haskell include=src/Example/FileSystem/Interface.hs snippet=testDeploy}
+```
+
+Because of the fact that we know that the fake is faithful to the real file
+system implementation, we can be relatively sure that swapping in the real file
+system instead of the fake one when deploying will not introduce bugs. If it
+does introduce a bug then we have a mismatch between the fake and the real
+implementation and we need to investigate how it slipped through our stateful
+property-based
+[tests](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs).
 
 #### Example: bigger system of components
 
