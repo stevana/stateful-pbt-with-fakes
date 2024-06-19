@@ -46,7 +46,7 @@ instance StateModel FakeFS where
 
   type Reference FakeFS = Handle
 
-  type PreconditionFailure FakeFS = Err
+  type PreconditionFailure FakeFS = PrecondFail
 
   type CommandMonad FakeFS = IO
 

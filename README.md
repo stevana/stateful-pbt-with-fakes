@@ -2743,7 +2743,145 @@ tests we know that the fake is faithful to the real implementaton.
 
 #### Example: file system
 
-- proper coverage?
+Edsko de Vries'
+[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019).
+
+See the [test
+module](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs)
+for details of how the stateful property-based tests are written.
+
+``` haskell
+root :: FilePath
+root = "/tmp/qc-test"
+
+rMkDir :: Dir -> IO ()
+rMkDir d = createDirectory (dirFP root d)
+
+rOpen :: File -> IO Handle
+rOpen f = openFile (fileFP root f) AppendMode
+
+rWrite :: Handle -> String -> IO ()
+rWrite h s = hPutStr h s
+
+rClose :: Handle -> IO ()
+rClose h = hClose h
+
+rRead :: File -> IO String
+rRead f = readFile (fileFP root f)
+```
+
+``` haskell
+type FHandle = Var Handle
+
+data FakeFS = F {
+    dirs  :: Set Dir
+  , files :: Map File String
+  , open  :: Map FHandle File
+  , next  :: FHandle
+  }
+  deriving Show
+
+emptyFakeFS :: FakeFS
+emptyFakeFS = F (Set.singleton (Dir [])) Map.empty Map.empty (Var 0)
+
+type FakeOp a = FakeFS -> (Either PrecondFail a, FakeFS)
+
+fMkDir :: Dir -> FakeOp ()
+fMkDir d m@(F ds fs hs n)
+  | d        `Set.member`    ds = (Left AlreadyExists, m)
+  | parent d `Set.notMember` ds = (Left DoesNotExist, m)
+  | otherwise                   = (Right (), F (Set.insert d ds) fs hs n)
+
+fOpen :: File -> FakeOp FHandle
+fOpen f m@(F ds fs hs n@(Var n_))
+  | alreadyOpen   = (Left Busy, m)
+  | not dirExists = (Left DoesNotExist, m)
+  | fileExists    = (Right n, F ds fs hs' n')
+  | otherwise     = (Right n, F ds (Map.insert f "" fs) hs' n')
+  where
+    hs' = Map.insert n f hs
+    n'  = Var (succ n_)
+
+    fileExists  =         f `Map.member` fs
+    dirExists   = fileDir f `Set.member` ds
+    alreadyOpen = f `List.elem` Map.elems hs
+
+fWrite :: FHandle -> String -> FakeOp ()
+fWrite h s m@(F ds fs hs n)
+  | Just f <- Map.lookup h hs = (Right (), F ds (Map.adjust (++ s) f fs) hs n)
+  | otherwise                 = (Left HandleClosed, m)
+
+fClose :: FHandle -> FakeOp ()
+fClose h (F ds fs hs n) = (Right (), F ds fs (Map.delete h hs) n)
+
+fRead :: File -> FakeOp String
+fRead f m@(F _ fs hs _)
+  | alreadyOpen               = (Left Busy         , m)
+  | Just s <- Map.lookup f fs = (Right s           , m)
+  | otherwise                 = (Left DoesNotExist , m)
+  where
+    alreadyOpen = f `List.elem` Map.elems hs
+```
+
+``` haskell
+data IFileSystem h = IFileSystem
+  { iMkDir :: Dir -> IO ()
+  , iOpen  :: File -> IO h
+  , iWrite :: h -> String -> IO ()
+  , iClose :: h -> IO ()
+  , iRead  :: File -> IO String
+  }
+```
+
+``` haskell
+real :: IFileSystem Handle
+real = IFileSystem
+  { iMkDir = rMkDir
+  , iOpen  = rOpen
+  , iWrite = rWrite
+  , iClose = rClose
+  , iRead  = rRead
+  }
+```
+
+``` haskell
+fake :: IO (IFileSystem FHandle)
+fake = do
+  ref <- newIORef emptyFakeFS
+  return IFileSystem
+    { iMkDir = \d   -> updateIORef ref (fMkDir d)
+    , iOpen  = \f   -> updateIORef ref (fOpen f)
+    , iWrite = \h s -> updateIORef ref (fWrite h s)
+    , iClose = \h   -> updateIORef ref (fClose h)
+    , iRead  = \f   -> updateIORef ref (fRead f)
+    }
+  where
+    updateIORef :: IORef FakeFS -> FakeOp a -> IO a
+    updateIORef ref op =
+      atomicModifyIORef' ref (\fs -> swap (op fs)) >>= \case
+        Left err -> throwIO err
+        Right x  -> return x
+      where
+        swap (x, y) = (y, x)
+```
+
+``` haskell
+prog :: IFileSystem h -> IO ()
+prog ifs = do
+  let d = Dir ["foo"]
+  iMkDir ifs d
+  let f = File d "bar"
+  h <- iOpen ifs f
+  iWrite ifs h "baz"
+  iClose ifs h
+  putStrLn =<< iRead ifs f
+
+test :: IO ()
+test = prog =<< fake
+
+deploy :: IO ()
+deploy = prog real
+```
 
 #### Example: bigger system of components
 

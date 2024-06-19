@@ -7,6 +7,7 @@ import Example.FileSystem.Fake
 
 ------------------------------------------------------------------------
 
+-- start snippet FileSystemReal
 root :: FilePath
 root = "/tmp/qc-test"
 
@@ -24,3 +25,4 @@ rClose h = hClose h
 
 rRead :: File -> IO String
 rRead f = readFile (fileFP root f)
+-- end snippet FileSystemReal

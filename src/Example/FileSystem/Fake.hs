@@ -7,7 +7,7 @@ module Example.FileSystem.Fake (
   , dirFP
   , fileFP
     -- * Errors
-  , Err(..)
+  , PrecondFail(..)
   , fromIOError
     -- * FakeFS file system
   , FHandle
@@ -58,16 +58,16 @@ fileFP root (File d f) = dirFP root d </> f
   Errors
 -------------------------------------------------------------------------------}
 
-data Err =
+data PrecondFail =
     AlreadyExists
   | DoesNotExist
   | HandleClosed
   | Busy
   deriving (Show, Eq)
 
-instance Exception Err
+instance Exception PrecondFail
 
-fromIOError :: IOError -> Maybe Err
+fromIOError :: IOError -> Maybe PrecondFail
 fromIOError e =
     case ioeGetErrorType e of
       GHC.AlreadyExists    -> Just AlreadyExists
@@ -80,6 +80,7 @@ fromIOError e =
   FakeFS implementation
 -------------------------------------------------------------------------------}
 
+-- start snippet FileSystemFake
 type FHandle = Var Handle
 
 data FakeFS = F {
@@ -93,7 +94,7 @@ data FakeFS = F {
 emptyFakeFS :: FakeFS
 emptyFakeFS = F (Set.singleton (Dir [])) Map.empty Map.empty (Var 0)
 
-type FakeOp a = FakeFS -> (Either Err a, FakeFS)
+type FakeOp a = FakeFS -> (Either PrecondFail a, FakeFS)
 
 fMkDir :: Dir -> FakeOp ()
 fMkDir d m@(F ds fs hs n)
@@ -130,3 +131,4 @@ fRead f m@(F _ fs hs _)
   | otherwise                 = (Left DoesNotExist , m)
   where
     alreadyOpen = f `List.elem` Map.elems hs
+-- end snippet FileSystemFake

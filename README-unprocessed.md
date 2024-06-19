@@ -2062,7 +2062,31 @@ is faithful to the real implementaton.
 
 #### Example: file system
 
-+ proper coverage?
+Edsko de Vries' [post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/)
+(2019).
+
+See the [test
+module](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/FileSystem/Test.hs)
+for details of how the stateful property-based tests are written.
+
+
+```{.haskell include=src/Example/FileSystem/Real.hs snippet=FileSystemReal}
+```
+
+```{.haskell include=src/Example/FileSystem/Fake.hs snippet=FileSystemFake}
+```
+
+```{.haskell include=src/Example/FileSystem/Interface.hs snippet=IFileSystem}
+```
+
+```{.haskell include=src/Example/FileSystem/Interface.hs snippet=real}
+```
+
+```{.haskell include=src/Example/FileSystem/Interface.hs snippet=fake}
+```
+
+```{.haskell include=src/Example/FileSystem/Interface.hs snippet=prog}
+```
 
 #### Example: bigger system of components
 

@@ -11,6 +11,7 @@ import Example.FileSystem.Real
 
 ------------------------------------------------------------------------
 
+-- start snippet IFileSystem
 data IFileSystem h = IFileSystem
   { iMkDir :: Dir -> IO ()
   , iOpen  :: File -> IO h
@@ -18,9 +19,11 @@ data IFileSystem h = IFileSystem
   , iClose :: h -> IO ()
   , iRead  :: File -> IO String
   }
+-- end snippet IFileSystem
 
 ------------------------------------------------------------------------
 
+-- start snippet real
 real :: IFileSystem Handle
 real = IFileSystem
   { iMkDir = rMkDir
@@ -29,15 +32,9 @@ real = IFileSystem
   , iClose = rClose
   , iRead  = rRead
   }
+-- end snippet real
 
-updateIORef :: IORef FakeFS -> FakeOp a -> IO a
-updateIORef ref op =
-  atomicModifyIORef' ref (\fs -> swap (op fs)) >>= \case
-    Left err -> throwIO err
-    Right x  -> return x
-  where
-    swap (x, y) = (y, x)
-
+-- start snippet fake
 fake :: IO (IFileSystem FHandle)
 fake = do
   ref <- newIORef emptyFakeFS
@@ -48,9 +45,19 @@ fake = do
     , iClose = \h   -> updateIORef ref (fClose h)
     , iRead  = \f   -> updateIORef ref (fRead f)
     }
+  where
+    updateIORef :: IORef FakeFS -> FakeOp a -> IO a
+    updateIORef ref op =
+      atomicModifyIORef' ref (\fs -> swap (op fs)) >>= \case
+        Left err -> throwIO err
+        Right x  -> return x
+      where
+        swap (x, y) = (y, x)
+-- end snippet fake
 
 ------------------------------------------------------------------------
 
+-- start snippet prog
 prog :: IFileSystem h -> IO ()
 prog ifs = do
   let d = Dir ["foo"]
@@ -61,8 +68,9 @@ prog ifs = do
   iClose ifs h
   putStrLn =<< iRead ifs f
 
-unit_real :: IO ()
-unit_real = prog real
+test :: IO ()
+test = prog =<< fake
 
-unit_fake :: IO ()
-unit_fake = prog =<< fake
+deploy :: IO ()
+deploy = prog real
+-- end snippet prog
