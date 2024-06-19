@@ -1983,12 +1983,12 @@ symbolic variable.
 Another option is to skip the scope checking and instead require the
 user to explicitly require preconditions which ensure the scope.
 
-We can also improve the shrinking by moving commands outside of forks,
-e.g. `[Fork [a, b]] ==> [Fork [a], Fork [b]]`, thus making the program
-more sequential, and moving forks after smaller forks, e.g.
-`[Fork [a, b], Fork [c]] ==> [Fork [c], Fork [a, b]]`, thus making for
-less potential concurrent interleavings. For simplicity, we've chosen
-not to implemented those here.
+XXX: move to todo? We can also improve the shrinking by moving commands
+outside of forks, e.g. `[Fork [a, b]] ==> [Fork [a], Fork [b]]`, thus
+making the program more sequential, and moving forks after smaller
+forks, e.g. `[Fork [a, b], Fork [c]] ==> [Fork [c], Fork [a, b]]`, thus
+making for less potential concurrent interleavings. For simplicity,
+we've chosen not to implemented those here.
 
 ##### Parallel running
 
@@ -2960,59 +2960,6 @@ The testing strategy is then as follows:
 
 Hopefully it should be clear that this strategy scales to more
 components or services[^7].
-
-### Prior work
-
-#### Stateful
-
-I'd like to explain where my inspiration is coming from, because I think
-it's important to note that the code I'm about to present didn't come
-from thin air (even though it might look simple).
-
-I've been thinking about this problem since the end of 2016 as can be
-witnesed by my involvement in the following
-[issue](https://github.com/nick8325/quickcheck/issues/139) about adding
-stateful testing to Haskell's QuickCheck.
-
-My initial attempt eventually turned into the Haskell library
-`quickcheck-state-machine`.
-
-The version below is a combination of my experience building that
-library, but also inspried by:
-
-1.  Nick Smallbone's initial
-    [version](https://github.com/nick8325/quickcheck/issues/139#issuecomment-279836475) (2017)
-    from that same issue. (Nick was, and I think still is, the main
-    maintainer of the original QuickCheck library);
-
-2.  John's Midlands Graduate School
-    [course](https://www.cse.chalmers.se/~rjmh/MGS2019/) (2019);
-
-3.  Edsko de Vries' "lockstep"
-    [technique](https://www.well-typed.com/blog/2019/01/qsm-in-depth/)
-    (2019).
-
-XXX: I'll refer back to these when I motivate my design decisions below.
-
-#### Parallel
-
-The following resources where useful when me and my then colleague,
-Daniel Gustafsson, first implemented parallel property-based testing in
-[`quickcheck-state-machine`](https://github.com/stevana/quickcheck-state-machine/tree/master)
-back in 2017.
-
-Apart from the [*Finding Race Conditions in Erlang with QuickCheck and
-PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
-(2009) paper and the [*Linearizability: a correctness condition for
-concurrent
-objects*](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) (1990)
-paper that they reference, it was useful to have a look at the Erlang's
-PropEr library, which is a (the first?) Quviq QuickCheck clone with
-support for both stateful and parallel testing.
-
-- Not property-based testing per say, but similar in that it generates
-  random commands and checks linearisability is Jepsen's
-  [Knossos](https://aphyr.com/posts/309-knossos-redis-and-linearizability)
 
 ## Conclusion and future work
 
