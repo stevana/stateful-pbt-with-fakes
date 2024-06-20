@@ -306,11 +306,10 @@ agencies to pay for this?
 
 On the other hand one could ask why there isn't a requirement that published
 research should be reproducible using open source tools (or at least tools that
-are freely available to the public and other researchers)?
-
-Trying to replicate the results from the Quviq QuickCheck papers (from 2006 and
-onward) without buying a Quviq QuickCheck license, is almost impossible without
-a lot of reverse engineering work.
+are freely available to the public and other researchers)? Trying to replicate
+the results from the Quviq QuickCheck papers (from 2006 and onward) without
+buying a Quviq QuickCheck license, is almost impossible without a lot of reverse
+engineering work.
 
 I suppose one could argue that one could have built a business around an open
 source tool, only charging for the training and consulting, but given how broken
@@ -320,18 +319,17 @@ probably even worse back in 2006).
 
 Even if John is right and that keeping it closed source has helped adoption in
 industry, I think it's by now fair to say it has not helped open source
-adoption.
-
-Or perhaps rather, it's unlikely that a company that pays for a
-license in Erlang would then go and port the library in another language.
+adoption. Or perhaps another way to look at it, it's unlikely that a company
+that pays for a license in Erlang would then go and port the library in another
+language.
 
 ### What can we do about it?
 
 I think there's at least two things worth trying.
 
 1. Provide a short open source implementation of stateful and parallel
-   property-based testing, analogous to the original ~300LOC vanilla QuickCheck
-   implementation.
+   property-based testing, analogous to the original ~300 lines of code
+   QuickCheck implementation.
 
    Perhaps part of the original QuickCheck library's success in spreading to so
    many other languages can be attributed to the fact that its small
@@ -371,9 +369,10 @@ a couple of lists such as the empty list and, say, the three element list `[1,
 How does one choose which example inputs to test against though? Typically one
 wants to choose corner cases, such as the empty list, that perhaps were
 overlooked during the implementation. It's difficult to think of corner cases
-that you might have overlooked! This is where generating random inputs, a key
-feature of property-based testing, comes in. The idea being that random inputs
-will eventually hit corner cases.
+that you might have overlooked (because if you can then you probably wouldn't
+have overlooked them in the first place)! This is where generating random
+inputs, a key feature of property-based testing, comes in. The idea being that
+random inputs will eventually hit corner cases.
 
 When we manually pick inputs for our tests, like `[1, 2, 3]`, we know what the
 output should be and so we can make the appropriate assertion, i.e. `reverse [1,
@@ -448,7 +447,7 @@ happens if we try to test that the output of reversing a list is the input list:
 ```
 
 We see that after 3 tests a test case was generated that failed, the input got
-shrunk twice and the minimal counter example `[0, 1]` is presented. Notice that
+shrunk twice and the minimal counterexample `[0, 1]` is presented. Notice that
 we do need a list that is at least of length two, because any shorter list will
 reverse to itself.
 
@@ -804,13 +803,13 @@ we'll use these optional types, hopefully these examples will help make things
 more concrete.
 
 We've already seen that the user needs to provide a way to generate single
-commands, the only thing worth mentioning is that in case our commands are
-parametrised by references then during the generation phase we only deal with
-`Var`s of references, where `data Var a = Var Int`. The reason for this is that
-we cannot generate, for example, real file handles (only the operating system
-can), so instead we generate symbolic references which are just `Int`s. Think of
-these as placeholders for which real references will be substituted in once the
-real references are created during execution.
+command, the only thing worth mentioning is that in case our commands contain
+references then during the generation phase we only deal with `Var`s of
+references, where `data Var a = Var Int`. The reason for this is that we cannot
+generate, for example, real file handles (only the operating system can), so
+instead we generate symbolic references which are just `Int`s. Think of these as
+placeholders for which real references will be substituted in once the real
+references are created during execution.
 
 Shrinking of individual commands is optional and disabled by default, but as
 we've seen this doesn't exclude the sequence of commands to be shrunk. We'll
@@ -864,19 +863,19 @@ holds.
 Using these two functions we can implement QuickCheck's `Arbitrary` type class
 for `Commands` which let's us generate and shrink `Commands`:
 
-```{.haskell include=src/Stateful.hs snippet=arbitrary}
-```
-
-```{.haskell include=src/Stateful.hs snippet=shrink}
+```{.haskell include=src/Stateful.hs snippet=Arbitrary}
 ```
 
 Notice how after shrinking we prune away all commands that don't pass the
-precondition.
+precondition or that are out of scope with respect to symbolic references.
 
 The intuition here is that as we remove commands from the originally generated
 `Commands` (which all pass their preconditions), we might have broken some
 preconditions and pruning simply removes the commands which we made invalid in
-the process of shrinking.
+the process of shrinking. Similarly we can have a command that creates a
+reference that later commands then depend on, if we during shrinking remove the
+command that created the reference then we must also remove the commands that
+depend on the reference.
 
 ##### Running and assertion checking
 
@@ -2055,119 +2054,33 @@ services[^7].
 
 We've seen how stateful and parallel property-based testing can be implemented
 in about 400 lines of code, which is comparable to the 300 lines of code of the
-first version of QuickCheck (which didn't have shrinking).
-
-We've also had a look at several examples of how we can use fakes as models and
-how to test bigger systems in a compositional manner by reusing the fakes.
+first version of QuickCheck (which didn't have shrinking). We've also had a look
+at several examples of how we can use fakes as models and how to test bigger
+systems in a compositional manner by reusing the fakes.
 
 I hope that this is enough material to get people curious and experimenting in
-other programming languages.
+other programming languages. I used Haskell, because it's what the original
+QuickCheck library is written in, but I think it would be good to translate code
+to other programming language paradigms, thus making it easier for others to
+learn and experiment. If anyone is interested in starting such a port to a
+different language, then I'd be happy to help. Feel free to open issues and ask
+questions in the the [code
+repository](https://github.com/stevana/stateful-pbt-with-fakes) of this post.
 
-I used Haskell, because it's what the original QuickCheck library is written in,
-but I think it would be good to translate code to other programming language
-paradigms, thus making it easier for library implementors.
-
-If anyone is interested in starting such a port to a different language, then
-I'd be happy to help. Feel free to open issues and ask questions in the the
-[code repository](https://github.com/stevana/stateful-pbt-with-fakes) of this
-post.
-
-I'm also open to suggestions on how the code (or text) can be improved. I think
-having a compact code base makes it cheaper to make experimental changes.
-
-Here are a bunch of idea I've not had time to experiment with yet:
-
-1. We can also improve the shrinking of parallel commands by moving commands outside of forks, e.g.
-   `[Fork [a, b]] ==> [Fork [a], Fork [b]]`, thus making the program more
-   sequential, or by moving forks after smaller forks, e.g. `[Fork [a, b], Fork [c]]
-   ==> [Fork [c], Fork [a, b]]`, thus making for less potential concurrent
-   interleavings;
-2. Can we make the thread scheduling in the parallel testing deterministic like
-   in the
-   [*PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
-   paper? Perhaps this is easier in other programming languages, e.g. via Rust's
-   [tokio
-   library](https://risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
-   or via multicore OCaml's effect handlers?
-3. When there's a mismatch between the fake and the real system in the
-   sequential case, we get a nice trace of what commands and state changes lead
-   to the mismatch. In the concurrent case we didn't implement any such
-   visualisation, although it would be useful to do so. The sequential trace can
-   also be improved by for example showing the diffs of the state changes rather
-   than repeating the whole state for each command;
-4. In our examples we've mostly used a uniform distribution of commands, for our
-   simple examples this is fine, but for more complicated examples we might need
-   better random generation strategies. Here are a few papers on this topic that
-   might be useful:
-     * [*Swarm testing*](https://users.cs.utah.edu/~regehr/papers/swarm12.pdf) (2012);
-     * [*Generating Good Generators for Inductive
-       Relations*](https://dl.acm.org/doi/10.1145/3158133) (POPL, 2018);
-     * [*Beginner’s Luck: A Language for Property-Based
-       Generators*](https://lemonidas.github.io/pdf/Luck.pdf) (POPL, 2017).
-5. We can also imagine not only using randomness for generating commands, see
-   for example [*Coverage Guided, Property Based
-   Testing*](https://dl.acm.org/doi/10.1145/3360607) (OOPSLA, 2019) or
-   [*Combinatorial Property-Based Testing: Do Judge a Test by its
-   Cover*](https://link.springer.com/chapter/10.1007/978-3-030-72019-3_10)
-   (ESOP, 2021) for two alternative generation strategies;
-6. Stateful and parallel testing together with reusing the fakes to test bigger
-   systems in a compositional way as covered in this post is enough for testing
-   a lot of systems. The correctness of distributed systems however relies on
-   the system functioning correctly even in the presence of failures. For this
-   we need to introduce fault-injection. Luckily fakes make fault-injection
-   easier. Recall how for the fakes we stored the state in a mutable variable,
-   if we want to add fault-injection we can simply introduce yet another mutable
-   variable which keeps track if the fault is enabled or not, and if it's then
-   we throw some error rather than returning. Linearisability checking
-   concurrent histories that contain timeouts involves more work than we've done
-   in this post however. Essentially any operation that times out must be
-   considered concurrent with all following operations. See the original
-   [paper](https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf) on
-   linearisability and Jepsen's
-   [Knossos](https://aphyr.com/posts/309-knossos-redis-and-linearizability)
-   checker for more details on this topic;
-7. The more operations that are concurrent at the same time the more work the
-   linearisability checker has to do. One technique that can reduce the amount
-   of work for the checker is partial order reduction. During concurrent
-   execution sometimes we can commute two operations without changing the
-   outcome, e.g. the interleaving of `Write "a" 1` and `Write "b" 2` doesn't
-   matter, they all end up the same state. We can exploit this fact to check less
-   histories;
-8. The properties we've covered in this post are so called safety properties,
-   i.e. "something bad will not happen". There's another class of properties
-   called liveness and fairness properties, i.e. "something good will eventually
-   happen". An example of liveness and fairness is that "a request made by a
-   client will eventually be served". It would be interesting to see what's
-   needed to support liveness and fairness. See
-   [TLA+](https://lamport.azurewebsites.net/tla/tla.html) and the Haskell
-   library
-   [`quickcheck-dynamic`](https://hackage.haskell.org/package/quickcheck-dynamic);
-   for more on this topic.
-9. We've discussed how we can hide for example the file system behind an
-   interface and use the fake implementation of that interface during testing.
-   If one applies this technique to all non-deterministic aspects of a system
-   (time, networking, randomness, etc) then one can run the system in a "fake
-   world", this is also known as [simulation
-   testing](https://youtube.com/watch?v=4fFDFbi3toc). How to carve out such
-   interfaces in a way that makes it easy to do fault-injection and at the same
-   time minimise the potential mismatch between the fake and the real
-   implementation of said interfaces is a challenge.
-
-I'd like to end by saying few words about formal specification, the source of
-the idea behind property-based testing. Formal specification and proofs are
-fundamental to computer science and have occupied minds since [Alan
-Turing](https://turingarchive.kings.cam.ac.uk/publications-lectures-and-talks-amtb/amt-b-8)
-(1949). Property-based testing gives us an excellent opportunity to introduce
-formal specification to a lot of programmers without the tedious and laborious
-formal proof part, we should cherish such education opportunities.
+I've also writen down a bunch of
+[ideas](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/TODO.md)
+for improvements and further exploration, in case anyone's interested in digging
+deeper into this topic (again, happy to elaborate, feel free to get [in
+touch](https://stevana.github.io/about.html)).
 
 ## Acknowledgments
 
 I'd like to thank Daniel Gustafsson for helping implement the
-`quickcheck-state-machine` library with me seven years ago, and for discussing a
-fix for parallel commands generation
+`quickcheck-state-machine` library with me seven years ago, discussing a fix for
+parallel commands generation
 [issue](https://github.com/stevana/quickcheck-state-machine/issues/51) that I
-found while writing this post.
+found while writing this post, and for proofreading.
+
 
 [^1]: Is there a source for this story? I can't remember where I've heard it.
     This short

@@ -142,7 +142,7 @@ nextState s cmd = case runFake cmd s of
   Left _err -> error "nextState: impossible, we checked for success in precondition"
 -- end snippet nextState
 
--- start snippet arbitrary
+-- start snippet Arbitrary
 instance StateModel state => Arbitrary (Commands state) where
 
   arbitrary :: Gen (Commands state)
@@ -161,9 +161,7 @@ instance StateModel state => Arbitrary (Commands state) where
                        Nothing  -> return []
                        Just cmd -> (cmd :) <$> genCommands (nextState s cmd))
             ]
--- end snippet arbitrary
 
--- start snippet shrink
   shrink :: Commands state -> [Commands state]
   shrink = pruneShrinks . possibleShrinks
     where
@@ -196,15 +194,13 @@ instance StateModel state => Arbitrary (Commands state) where
                     vars' = returnedVars `Set.union` vars
                   in
                     go s' vars' (cmd : acc) cmds
--- end snippet shrink
 
--- start snippet scopeCheck
 scopeCheck :: Foldable (Command state)
            => Set (Var a) -> Command state (Var a) -> Bool
 scopeCheck varsInScope cmd = usedVars `Set.isSubsetOf` varsInScope
   where
     usedVars = Set.fromList (toList cmd)
--- end snippet scopeCheck
+-- end snippet Arbitrary
 
 ------------------------------------------------------------------------
 
