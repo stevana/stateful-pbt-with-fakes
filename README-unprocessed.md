@@ -466,7 +466,7 @@ are a few other examples:
 
 Readers familiar with discrete math might recognise some of the above.
 
-### Stateful property-based testing in ~180 LOC
+### Stateful property-based testing
 
 In the pure property-based testing case, that we just looked at, the picture
 of the test setup looks a bit like this:
@@ -1036,8 +1036,8 @@ Having defined our model the interface implementation is almost mechanical.
 
 The only new thing worth paying attention to is the `q` in `Command` and
 `Response`, which is parametrised so that it works for both symbolic and real
-references. The `Functor` instance let's us to substitution, while `Foldable`
-let's us extract all new references from a response, so that we can substitute
+references. The `Functor` instance lets us do substitution, while `Foldable`
+lets us extract all new references from a response, so that we can substitute
 them in later `Command`s.
 
 ##### Testing
@@ -1086,16 +1086,7 @@ fPut q i s
 We can add the counterexample that we got as a regression test to our test suite
 as follows:
 
-```haskell
-unit_queueFull :: IO ()
-unit_queueFull = quickCheck (withMaxSuccess 1 (expectFailure (prop_queue cmds)))
-  where
-    cmds = Commands
-      [ New 1
-      , Put (Var 0) 1
-      , Put (Var 0) 0
-      , Get (Var 0)
-      ]
+```{.haskell include=src/Example/Queue/Test.hs snippet=unit_queueFull}
 ```
 
 Notice that we can basically copy-paste `cmds` from QuickCheck's output, but
@@ -1280,7 +1271,7 @@ and debugging of the code.
 
 #### Example: jug puzzle from Die Hard 3
 
-In the movie Die Hard 3 there's an
+In the movie Die Hard 3 there's a
 [scene](https://www.youtube.com/watch?v=BVtQNK_ZUJg) where Bruce Willis and
 Samuel L. Jackson have to solve a puzzle in order to stop a bomb from going off.
 The puzzle is: given a 3L and a 5L jug, how can you measure exactly 4L?
@@ -1333,7 +1324,7 @@ When we run `quickcheck prop_dieHard` we get the following output:
 Notice how the trace shows the intermediate states, making it easy to verify
 that it's indeed a correct solution to the puzzle[^3].
 
-### Parallel property-based testing in ~230 LOC
+### Parallel property-based testing
 
 Let's now turn our focus to parallel property-based testing.
 
@@ -1343,15 +1334,16 @@ reproduce the bug and hard to verify that a bug fix actually worked.
 
 Ideally we'd like to make working with concurrent code as pleasant as the
 sequential stateful case and without the user having to write any additional
-test code.
-
-In order to explain how we can achieve this, we need to first understand how we
-can test concurrent code in a reproducible way.
+test code. In order to explain how we can achieve this, we need to first
+understand how we can test concurrent code in a reproducible way.
 
 Recall our `Counter` that we looked at in the sequential testing case. Here
 we'll be using a slight generalisation where the `incr` takes an integer
-parameter which specifies by how much we want to increment (as opposed to always
+parameter which specifies by how much we want to increment (instead of always
 incrementing by `1`).
+
+When we interact with the counter sequentially, i.e. one command at the time,
+then it appears to count correctly:
 
 ```haskell
 >>> incr 1
@@ -1359,9 +1351,6 @@ incrementing by `1`).
 >>> get
 3
 ```
-
-When we interact with the counter sequentially, i.e. one command at the time,
-then it appears to count correctly.
 
 But if we instead concurrently issue the `incr`ements , we see something
 strange:
@@ -1386,7 +1375,7 @@ for this is because there's a race condition in the implementation of `incr`:
 
 Because we first read the old value and _then_ write the new incremented value
 in an non-atomic way, it's possible that if two threads do this at the same time
-they overwrite each others increment. For example:
+they overwrite each others increment. For example, consider the interleaving:
 
 ```
    thread 1, incr 1     |  thread 2, incr 2
@@ -1499,12 +1488,12 @@ the model then the history doesn't linearise and we have found a problem.
 #### Parallel library implementation
 
 Let's try to implement the above. We'll split up the implementation in three
-parts. First we'll show how to generate and shrink parallel commands, these will
-be different than the sequential commands as we have more than one thread that
-does the execution. Second we'll implement linearisability checking by trying to
-find an interleaving of the concurrent history which respects the sequential
-model. Finally, we'll have a look at how to execute the generated parallel
-commands to produce a concurrent history.
+parts. First, we'll show how to generate and shrink parallel commands, these
+will be different than the sequential commands as we have more than one thread
+that does the execution. Second, we'll have a look at how to execute the
+generated parallel commands to produce a concurrent history. Finally, we'll
+implement linearisability checking by trying to find an interleaving of the
+concurrent history which respects the sequential model.
 
 ##### Parallel program generation and shrinking
 
@@ -1552,25 +1541,9 @@ requires a bit of background.
 In the sequential case a precondition is a contract that needs to be fulfilled
 by the client before the command is issued. In the parallel case there are
 multiple clients, so it could be the case that one client unknowingly breaks
-another clients precondition.
-
-E.g. `Fork [Write "a" "foo", Delete "a"]`, where the precondition for both
-commands is that `"a"` exists. If `Delete` gets executed first then it would
-break `Write`'s precondition.
-
-One idea might be to drop all preconditions in the parallel case and make all
-commands be able to fail gracefully instead of crashing, e.g. `Write_ (Either
-DoesntExist ())`.
-
-XXX: make counter or queue example into one of such examples:
-
-The problem with this approach is that examples such as the ticket dispenser
-have initialisation commands such as `New` which create a ticket dispenser
-reference upon which the later commands depend on, so without preconditions
-forbidding more than one `New` we can end up generating: `Fork New New`, which
-doesn't make sense. It should also be noted that making `New` fail gracefully
-when a `New` has already been executed would need a global boolean flag, which
-is ugly.
+another clients precondition. For example `Fork [Write "a" "foo", Delete "a"]`,
+where the precondition for both commands is that `"a"` exists. If `Delete` gets
+executed first then it would break `Write`'s precondition.
 
 The solution to the precondition problem is to check that they hold in all
 possible interleavings of a `Fork`, which is what `parallelSafe` does:
@@ -1588,14 +1561,15 @@ if we remove a command which creates a symbolic variable we also need to remove
 any fork that contains a command which uses said symbolic variable.
 
 Another option is to skip the scope checking and instead require the user to
-explicitly require preconditions which ensure the scope.
+explicitly require preconditions which ensure the scope[^4].
 
 ##### Parallel running
 
-One final difference in the parallel case is that because of the use of threads
-to achieve parallel execution, and the fact we can only spawn threads of things
-of type `IO`, we also need to be able to interpret our `CommandMonad` into `IO`,
-which is what `runCommandMonad` does.
+One final difference between the sequential and the parallel case is that
+because of the use of threads to achieve parallel execution, and the fact we can
+only spawn threads of things of type `IO`, we also need to be able to interpret
+our `CommandMonad` into `IO`, which is what `runCommandMonad` (which is also
+part of the `ParallelModel` type class) does.
 
 ```{.haskell include=src/Parallel.hs snippet=runCommandMonad}
 ```
@@ -1637,8 +1611,14 @@ the sequential model:
 
 #### Example: parallel counter
 
+XXX: having defined the `ParallelModel` interface (which depends on the
+`StateModel` interface from the sequential testing) and programmed our parallel
+generation, shrinking and parallel execution and linearisability checking of
+against this interface, this is what we get: parallel testing in just a few
+lines of code.
+
 This is the only new code we need to add to enable parallel testing of our
-`Counter` example[^4] from before:
+`Counter` example[^5] from before:
 
 ```{.haskell include=src/Example/Counter.hs snippet=parallel-counter}
 ```
@@ -1704,7 +1684,7 @@ introduction of sleep is only needed to make the counterexample smaller.
 #### Example: process registry
 
 For a slightly more complicated example containing race conditions, let's have a
-look at an implementation of the Erlang process registry[^5].
+look at an implementation of the Erlang process registry[^6].
 
 ##### Software under test
 
@@ -2003,7 +1983,7 @@ file system.
 #### Example: bigger system of components
 
 The examples given above, a queue and a file system, might not seems necessary
-to fake[^6] so to finish of let's sketch how the same technique scales to a
+to fake[^7] so to finish of let's sketch how the same technique scales to a
 bigger system of components or services.
 
 Imagine we have three components or services, where component *A* depends on
@@ -2044,7 +2024,7 @@ The testing strategy is then as follows:
 3. Use B fake (which uses the C fake) when testing A.
 
 Hopefully it should be clear that this strategy scales to more components or
-services[^7].
+services[^8].
 
 ## Conclusion and future work
 
@@ -2108,12 +2088,25 @@ found while writing this post, and for proofreading.
     guidance, see [*Coverage guided, property based
     testing*](https://dl.acm.org/doi/10.1145/3360607) (2019).
 
-[^4]: The parallel counter example is very similar to the ticket dispenser
+[^4]: Another idea might be to drop all preconditions in the parallel case and
+    make all commands be able to fail gracefully instead of crashing, e.g.
+    `Write_ (Either DoesntExist ())`.
+
+    The problem with this approach is that some examples, such as the [ticket
+    dispenser](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/TicketDispenser.hs),
+    have initialisation commands such as `New` which create a ticket dispenser
+    reference upon which the later commands depend on, so without preconditions
+    forbidding more than one `New` we can end up generating: `Fork New New`,
+    which doesn't make sense. It should also be noted that making `New` fail
+    gracefully when a `New` has already been executed would need a global
+    boolean flag, which is ugly.
+
+[^5]: The parallel counter example is very similar to the ticket dispenser
     example that appears in [*Testing the hard stuff and staying
     sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
     (2014).
 
-[^5]: The sequential variant of the process registry example first appeared in
+[^6]: The sequential variant of the process registry example first appeared in
     the paper [*QuickCheck testing for fun and
     profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
     (2007) and is also part of John's Midlands Graduate School course (2019).
@@ -2122,7 +2115,7 @@ found while writing this post, and for proofreading.
     PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
     (2009).
 
-[^6]: Unless we want to test what happens when failures, such as the disk being
+[^7]: Unless we want to test what happens when failures, such as the disk being
     full etc.
     [Research](http://www.eecg.toronto.edu/~yuan/papers/failure_analysis_osdi14.pdf)
     shows that "almost all (92%) of the catastrophic system failures are the
@@ -2132,6 +2125,6 @@ found while writing this post, and for proofreading.
     code.". Fakes make it easier to inject faults, but that's a story for
     another day.
 
-[^7]: See the talk [Integrated Tests Are A
+[^8]: See the talk [Integrated Tests Are A
     Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger for a
     longer presentation of this idea.

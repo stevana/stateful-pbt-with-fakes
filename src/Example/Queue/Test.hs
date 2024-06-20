@@ -81,6 +81,7 @@ prop_queue cmds = monadicIO $ do
   assert True
 -- end snippet prop_queue
 
+-- start snippet unit_queueFull
 unit_queueFull :: IO ()
 unit_queueFull = quickCheck (withMaxSuccess 1 (expectFailure (prop_queue cmds)))
   where
@@ -90,6 +91,7 @@ unit_queueFull = quickCheck (withMaxSuccess 1 (expectFailure (prop_queue cmds)))
       , Put (Var 0) 0
       , Get (Var 0)
       ]
+-- end snippet unit_queueFull
 
 unit_queueSize :: IO ()
 unit_queueSize = quickCheck (withMaxSuccess 1 (prop_queue cmds))
