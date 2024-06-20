@@ -2152,7 +2152,9 @@ Having defined the `ParallelModel` interface (which depends on the
 `StateModel` interface from the sequential testing) and programmed our
 parallel generation, shrinking and parallel execution and
 linearisability checking against this interface, we basically get
-parallel testing for free.
+parallel testing for free by reusing the sequential model.
+
+##### Testing
 
 This is the only new code we need to add to enable parallel testing of
 our `Counter` example[^5] from before:
@@ -2471,7 +2473,7 @@ instance Foldable NonFoldable where
   foldMap _f (NonFoldable _x) = mempty
 ```
 
-###### Testing
+##### Testing
 
 The above passes the sequential tests and we can see that we got good
 coverage of failing commands as well:
