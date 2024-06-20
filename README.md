@@ -2148,6 +2148,12 @@ linearisable env = any' (go initialState)
 
 #### Example: parallel counter
 
+Having defined the `ParallelModel` interface (which depends on the
+`StateModel` interface from the sequential testing) and programmed our
+parallel generation, shrinking and parallel execution and
+linearisability checking against this interface, we basically get
+parallel testing for free.
+
 This is the only new code we need to add to enable parallel testing of
 our `Counter` example[^5] from before:
 
@@ -2183,7 +2189,12 @@ incrRaceCondition = do
 then a failure is found:
 
      Assertion failed (after 36 tests and 1 shrink):
-          ParallelCommands [Fork [Incr,Incr],Fork [Incr],Fork [Get,Get,Get],Fork [Incr],Fork [Get,Get],Fork [Get,Get],Fork [Incr],Fork [Get,Get,Incr],Fork [Incr],Fork [Get,Get,Get],Fork [Incr,Incr],Fork [Incr,Get],Fork [Incr,Incr],Fork [Get],Fork [Incr]]
+          ParallelCommands [Fork [Incr,Incr],Fork [Incr],Fork [Get,Get,Get],
+                            Fork [Incr],Fork [Get,Get],Fork [Get,Get],
+                            Fork [Incr],Fork [Get,Get,Incr],Fork [Incr],
+                            Fork [Get,Get,Get],Fork [Incr,Incr],
+                            Fork [Incr,Get],Fork [Incr,Incr],Fork [Get],
+                            Fork [Incr]]
 
 But shrinking didn't work very well. The reason for this is that
 QuickCheck tries a smaller test case (which still has the race
@@ -2192,10 +2203,11 @@ doesn't get triggered and so QuickCheck thinks it found the minimal test
 case (because the smaller test case, that the shrinker picked, passes).
 
 The proper solution to this problem is to use a deterministic thread
-scheduler, this is what they do the parallel testing paper. A simpler
-workaround is to introduce a small sleep after each read or write to
-shared memory, this will make it more likely that the same interleaving
-happens when we shrink the test:
+scheduler, this is what they do the parallel testing
+[paper](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf).
+A simpler workaround is to introduce a small sleep after each read or
+write to shared memory, this will make it more likely that the same
+interleaving happens when we shrink the test:
 
 ``` haskell
 incrRaceCondition :: IO ()
@@ -2233,14 +2245,10 @@ readIORef ref = do
 
 That way if we find a race, we can change the import from
 `import Data.IORef` to `import SleepyIORef` and rerun the tests and get
-better shrinking.
-
-This situation is not ideal, but save us the trouble of having to
-re-implement a scheduler.
-
-It's worth stressing that the race is found in the unmodified code and
-the introduction of sleep is only needed to make the counterexample
-smaller.
+better shrinking. This situation is not ideal, but save us the trouble
+of having to re-implement a scheduler. It's worth stressing that the
+race is found in the unmodified code and the introduction of sleep is
+only needed to make the counterexample smaller.
 
 #### Example: process registry
 
@@ -3022,8 +3030,9 @@ that I found while writing this post, and for proofreading.
     be noted that making `New` fail gracefully when a `New` has already
     been executed would need a global boolean flag, which is ugly.
 
-[^5]: The parallel counter example is very similar to the ticket
-    dispenser example that appears in [*Testing the hard stuff and
+[^5]: The parallel counter example is very similar to the [ticket
+    dispenser](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/TicketDispenser.hs)
+    example that appears in John's paper [*Testing the hard stuff and
     staying
     sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
     (2014).
