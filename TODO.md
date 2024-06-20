@@ -26,12 +26,12 @@ Here are a bunch of idea I think are worth exploring:
    might be useful:
      * [*Swarm testing*](https://users.cs.utah.edu/~regehr/papers/swarm12.pdf) (2012);
      * [*Generating Good Generators for Inductive
-       Relations*](https://dl.acm.org/doi/10.1145/3158133) (POPL, 2018);
+       Relations*](https://dl.acm.org/doi/10.1145/3158133) (POPL 2018);
      * [*Beginner’s Luck: A Language for Property-Based
-       Generators*](https://lemonidas.github.io/pdf/Luck.pdf) (POPL, 2017).
+       Generators*](https://lemonidas.github.io/pdf/Luck.pdf) (POPL 2017).
 5. We can also imagine not only using randomness for generating commands, see
    for example [*Coverage Guided, Property Based
-   Testing*](https://dl.acm.org/doi/10.1145/3360607) (OOPSLA, 2019) or
+   Testing*](https://dl.acm.org/doi/10.1145/3360607) (OOPSLA 2019) or
    [*Combinatorial Property-Based Testing: Do Judge a Test by its
    Cover*](https://link.springer.com/chapter/10.1007/978-3-030-72019-3_10)
    (ESOP, 2021) for two alternative generation strategies;

@@ -1035,8 +1035,8 @@ Once we've generated `Commands` we need to execute them against the
 model and the real system using `runFake` and `runReal`. In the process
 of doing so `runReal` will produce `Reference`s that later commands
 might use, so we also need to substitute symbolic references for real
-references. This, together coverage statistics bookkeeping, is done in
-the `runCommands` function:
+references. This, together with coverage statistics bookkeeping, is done
+in the `runCommands` function:
 
 ``` haskell
 runCommands :: forall state. StateModel state
@@ -1224,6 +1224,54 @@ Having defined our model the interface implementation is almost
 mechanical.
 
 ``` haskell
+instance StateModel State where
+
+  initialState = Map.empty
+
+  type Reference State = Queue
+
+  type PreconditionFailure State = Err
+
+  data Command State q
+    = New Int
+    | Put q Int
+    | Get q
+    | Size q
+    deriving (Show, Functor, Foldable)
+
+  data Response State q
+    = New_ q
+    | Put_ ()
+    | Get_ Int
+    | Size_ Int
+    deriving (Eq, Show, Functor, Foldable)
+
+  generateCommand s
+    | Map.null s = New . getPositive <$> arbitrary
+    | otherwise  = oneof
+      [ New . getPositive <$> arbitrary
+      , Put  <$> arbitraryQueue <*> arbitrary
+      , Get  <$> arbitraryQueue
+      ]
+    where
+      arbitraryQueue :: Gen (Var Queue)
+      arbitraryQueue = elements (Map.keys s)
+
+  shrinkCommand _s (New i)   = [ New i'   | Positive i' <- shrink (Positive i) ]
+  shrinkCommand _s (Put q i) = [ Put q i' | i' <- shrink i ]
+  shrinkCommand _s _cmd = []
+
+  runFake (New sz)  s = fmap New_  <$> fNew sz s
+  runFake (Put q i) s = fmap Put_  <$> fPut q i s
+  runFake (Get q)   s = fmap Get_  <$> fGet q s
+  runFake (Size q)  s = fmap Size_ <$> fSize q s
+
+  -- Here `new`, `put`, `get` and `size` are FFI wrappers for their respective C
+  -- functions.
+  runReal (New sz)  = New_  <$> new sz
+  runReal (Put q i) = Put_  <$> put q i
+  runReal (Get q)   = Get_  <$> get q
+  runReal (Size q)  = Size_ <$> size q
 ```
 
 The only new thing worth paying attention to is the `q` in `Command` and

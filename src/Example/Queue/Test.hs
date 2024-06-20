@@ -18,7 +18,7 @@ import Stateful
 
 ------------------------------------------------------------------------
 
--- begin snippet QueueStateModel
+-- start snippet QueueStateModel
 instance StateModel State where
 
   initialState = Map.empty
@@ -47,8 +47,6 @@ instance StateModel State where
       [ New . getPositive <$> arbitrary
       , Put  <$> arbitraryQueue <*> arbitrary
       , Get  <$> arbitraryQueue
-      -- NOTE: Uncomment once precondition for put has been added and the property passes.
-      , Size <$> arbitraryQueue
       ]
     where
       arbitraryQueue :: Gen (Var Queue)
@@ -71,10 +69,17 @@ instance StateModel State where
   runReal (Size q)  = Size_ <$> size q
 -- end snippet QueueStateModel
 
+-- NOTE: Add to generateCommand once precondition for put has been added and the
+-- property passes:
+--
+-- , Size <$> arbitraryQueue
+
+-- start snippet prop_queue
 prop_queue :: Commands State -> Property
 prop_queue cmds = monadicIO $ do
   runCommands cmds
   assert True
+-- end snippet prop_queue
 
 unit_queueFull :: IO ()
 unit_queueFull = quickCheck (withMaxSuccess 1 (expectFailure (prop_queue cmds)))

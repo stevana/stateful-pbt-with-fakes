@@ -882,7 +882,7 @@ depend on the reference.
 Once we've generated `Commands` we need to execute them against the model and
 the real system using `runFake` and `runReal`. In the process of doing so
 `runReal` will produce `Reference`s that later commands might use, so we also
-need to substitute symbolic references for real references. This, together
+need to substitute symbolic references for real references. This, together with
 coverage statistics bookkeeping, is done in the `runCommands` function:
 
 ```{.haskell include=src/Stateful.hs snippet=runCommands}
@@ -1044,11 +1044,7 @@ them in later `Command`s.
 
 Having implemented the interface, we can write our property as follows.
 
-```haskell
-prop_queue :: Commands State -> Property
-prop_queue cmds = monadicIO $ do
-  runCommands cmds
-  assert True
+```{.haskell include=src/Example/Queue/Test.hs snippet=prop_queue}
 ```
 
 When we run it, using `quickCheck prop_queue`, we get the following error.
