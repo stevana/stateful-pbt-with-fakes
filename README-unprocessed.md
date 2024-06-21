@@ -1890,25 +1890,20 @@ then reused for all our parallel testing examples!
 ### Integration testing with contract tested fakes
 
 Throughout this post we've used in-memory models, or fakes, as reference
-implementations to test against.
-
-The use of fakes diverges from the original work on Erlang QuickCheck, where a
-more traditional state machine specification is used with post-conditions.
+implementations to test against. The use of fakes diverges from the original
+work on Quviq's Erlang QuickCheck, where a more traditional state machine
+specification is used with post-conditions.
 
 As far as I know, Edsko de Vries'
 [post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019) was the
 first to propose the use of fakes instead of state machine specifications with
 post-conditions. Edsko also showed how one can implement fake-based
-specifications on top of a library that uses state machine specifications.
+specifications on top of a library that uses state machine specifications[^7].
 
-XXX: Post-conditions are more general than fakes? Relational vs functional?
-
-Fake instead of state machine spec is not only easier for programmers
-unfamiliar with formal specification
-
-But there are other advantages to having a fake, for example we can use this
-fake in integration tests with components that depend on the software that we
-tested with the fake.
+Using fakes instead of state machine specifications with post-conditions is not
+only easier for programmers unfamiliar with formal specification, but there are
+other advantages as well. For example we can use this fake in integration tests
+with components that depend on the software that we tested with the fake.
 
 One of the problems with integration testing against fakes is that the fake can
 be wrong. The standard solution to solve that problem is to [contract
@@ -1917,7 +1912,8 @@ that it is faithful to the software it's supposed to be a fake of. We don't have
 this problem, because our tests assure that the fake is faithful.
 
 This, final, section is about unpacking and giving examples of how integration
-testing against fakes works.
+testing against fakes works. Hopefully this shows how the testing methodology
+that we've explored in this post can be scaled to a bigger system of components.
 
 #### Example: queue (again)
 
@@ -2015,7 +2011,7 @@ file system.
 #### Example: bigger system of components
 
 The examples given above, a queue and a file system, might not seems necessary
-to fake[^7] so to finish of let's sketch how the same technique scales to a
+to fake[^8] so to finish of let's sketch how the same technique scales to a
 bigger system of components or services.
 
 Imagine we have three components or services, where component *A* depends on
@@ -2056,7 +2052,7 @@ The testing strategy is then as follows:
 3. Use B fake (which uses the C fake) when testing A.
 
 Hopefully it should be clear that this strategy scales to more components or
-services[^8].
+services[^9].
 
 ## Conclusion and future work
 
@@ -2148,7 +2144,12 @@ found while writing this post, and for proofreading.
     PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
     (2009).
 
-[^7]: Unless we want to test what happens when failures, such as the disk being
+[^7]: I believe the post-condition formulation is more general, as it allows a
+    relational rather than a functional specification. So I don't think we can
+    show the converse of what Edsko did, i.e. implement a post-condition style
+    specification on top of our fake-based one.
+
+[^8]: Unless we want to test what happens when failures, such as the disk being
     full etc.
     [Research](http://www.eecg.toronto.edu/~yuan/papers/failure_analysis_osdi14.pdf)
     shows that "almost all (92%) of the catastrophic system failures are the
@@ -2158,6 +2159,6 @@ found while writing this post, and for proofreading.
     code.". Fakes make it easier to inject faults, but that's a story for
     another day.
 
-[^8]: See the talk [Integrated Tests Are A
+[^9]: See the talk [Integrated Tests Are A
     Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger for a
     longer presentation of this idea.
