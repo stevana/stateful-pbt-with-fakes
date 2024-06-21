@@ -20,14 +20,14 @@ import GHC.Conc (ThreadStatus(ThreadDied, ThreadFinished), threadStatus)
 import System.IO.Unsafe
 
 -- start snippet RegistryRealRace
+{-# NOINLINE registry #-}
+registry :: IORef [(String,ThreadId)]
+registry = unsafePerformIO (newIORef [])
+
 alive :: ThreadId -> IO Bool
 alive tid = do
   s <- threadStatus tid
   return $ s /= ThreadFinished && s /= ThreadDied
-
-{-# NOINLINE registry #-}
-registry :: IORef [(String,ThreadId)]
-registry = unsafePerformIO (newIORef [])
 
 spawn :: IO ThreadId
 spawn = forkIO (threadDelay 100000000)

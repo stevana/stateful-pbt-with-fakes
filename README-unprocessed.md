@@ -1707,10 +1707,23 @@ registry.
 
 ##### Model
 
+The model of the process registry contains three things that we haven't seen
+before. The first thing to note is that `Register` and `Unregister` might fail,
+so we use an `Either ErrorCall` in their respective responses and a function
+called `abstractError` to make the error from the model and the error from the
+real implementation match up. It's called abstract, because it abstracts away
+details from the real implementation, and it's a useful technique to know as it
+can be applied to other settings.
+
+The second thing to notice is the use of `monitoring` to keep statistics of how
+often `Register` and `Unregister` actually do fail, this is useful coverage
+information that ensures that our generators and or pre-conditions are not too
+restrictive.
+
 ```{.haskell include=src/Example/Registry/Test.hs snippet=Registry}
 ```
 
-One new thing to note here is that `WhereIs_` returns the thread id that we
+The last new thing to note here is that `WhereIs_` returns the thread id that we
 wanted to look up, but thread ids also happen to be references. The way we
 implemented extending the environment with new references is that we call
 `Data.Foldable.toList` on all responses, which gives us all references from the
@@ -1726,8 +1739,14 @@ that `WhereIs_` returns. We solve this problem with wrapping the response of
 
 ##### Testing
 
-The above passes the sequential tests and we can see that we got good coverage
-of failing commands as well:
+We can now write our sequential testing property as we've done earlier for the
+other examples.
+
+```{.haskell include=src/Example/Registry/Test.hs snippet=prop_registry}
+```
+
+This property passes and we can see, thanks to our `monitoring`, that we got
+good coverage of failing commands as well:
 
       +++ OK, passed 100 tests:
       83% Spawn
@@ -1787,9 +1806,9 @@ following:
       Got: Unregister_ (Left bad argument)
 ```
 
-As we can see unregister fails, when it in fact so should succeed (we've
-registered `"e"` so we should be allowed to unregister it, but the real
-implementation has due to the bug forgot that the registration happened).
+As we can see, unregister fails when it in fact should succeed. We've registered
+`"e"` so we should be allowed to unregister it, but the real implementation has,
+due to the bug, forgot that the registration happened.
 
 Let's move on to the parallel tests, all we need to add is:
 
@@ -1860,6 +1879,13 @@ is indeed the case. After applying the same fix to `unregister`, we get:
 
 Killing a thread will unregister it, so we get a similar problem again. If we
 take the lock before calling `kill`, then the parallel tests finally pass.
+
+These race conditions are essentially variants on the parallel counter bug, but
+I hope you agree that they're not as obvious in the process registry case. I
+also hope that by now it's clear that as a user we get these parallel tests
+basically without doing any extra work. All the heavy lifting is done by the
+library by reusing the sequential model, and this code can be written once and
+then reused for all our parallel testing examples!
 
 ### Integration testing with contract tested fakes
 

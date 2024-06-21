@@ -5,8 +5,6 @@ import Control.Concurrent (threadDelay)
 import Data.IORef (IORef)
 import qualified Data.IORef as IORef
 
-------------------------------------------------------------------------
-
 readIORef :: IORef a -> IO a
 readIORef ref = do
   threadDelay 1000

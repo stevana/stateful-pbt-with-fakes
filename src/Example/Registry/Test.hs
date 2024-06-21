@@ -120,7 +120,9 @@ allNames = ["a", "b", "c", "d", "e"]
 
 data Tag = RegisterFailed | RegisterSucceeded | UnregisterFailed | UnregisterSucceeded
   deriving Show
+-- end snippet Registry
 
+-- start snippet prop_registry
 prop_registry :: Commands RegState -> Property
 prop_registry cmds = monadicIO $ do
   void (run cleanUp)
@@ -132,7 +134,7 @@ cleanUp = sequence
   [ try (unregister name) :: IO (Either ErrorCall ())
   | name <- allNames
   ]
--- end snippet Registry
+-- end snippet prop_registry
 
 -- start snippet ParallelRegistry
 instance ParallelModel RegState where
@@ -144,4 +146,4 @@ prop_parallelRegistry cmds = monadicIO $ do
     void (run cleanUp)
     runParallelCommands cmds
   assert True
--- start snippet ParallelRegistry
+-- end snippet ParallelRegistry
