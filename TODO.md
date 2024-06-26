@@ -6,7 +6,11 @@ Here are a bunch of idea I think are worth exploring:
    outside of forks, e.g. `[Fork [a, b]] ==> [Fork [a], Fork [b]]`, thus making
    the program more sequential, or by moving forks after smaller forks, e.g.
    `[Fork [a, b], Fork [c]] ==> [Fork [c], Fork [a, b]]`, thus making for less
-   potential concurrent interleavings;
+   potential concurrent interleavings. Another thing that could be interesting
+   to investigate is whether a property-based testing library with integrated
+   shrinking, such as Python's hypothesis or Haskell's
+   [`falsify`](https://hackage.haskell.org/package/falsify), can do the above
+   parallel command shrinking or simplify shrinking in general;
 2. Can we make the thread scheduling in the parallel testing deterministic like
    in the
    [*PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
