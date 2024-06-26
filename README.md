@@ -275,7 +275,7 @@ code is good practice in any programming language, and I do agree with
 John that you can get far by merely property-based testing those pure
 fragments.
 
-However I also think that stateful and parallel testing is almost
+However, I also think that stateful and parallel testing is almost
 equally important for many non-trivial software systems. Most systems in
 industry will have some database, stateful protocol or use concurrent
 data structures, which all benefit from the stateful and parallel
@@ -377,8 +377,9 @@ this post as follows:
     testing in about 400 lines of code (similar to the size of the
     original QuickCheck implementation);
 
-2.  Make specifications simpler by using
-    [fakes](https://martinfowler.com/bliki/TestDouble.html) rather than
+2.  Make specifications simpler by using in-memory reference
+    implementations similar to mocks, more accurately called
+    [fakes](https://martinfowler.com/bliki/TestDouble.html), rather than
     state machines.
 
 Before we get started with stateful testing, let's first recap how
@@ -502,7 +503,7 @@ picture of the test setup looks a bit like this:
              +-----+
 
 Where `i` is the input we generate, `f` is the function we are applying
-the generated input to to produce the output `o`. In the case of the
+the generated input to produce the output `o`. In the case of the
 `reverse` example, from before, `i` and `o` are of type list of integers
 (`[Int]`), `f` is `reverse . reverse` and the property that we check for
 every generated input is that input is equal to the output.
@@ -545,25 +546,27 @@ account for how the state changes over time. Writing such properties is
 cumbersome, an alternative is to account for the state explicitly by
 means of some kind of model.
 
-This model could be a state machine of type `m -> i -> (m, o)`, i.e. a
-function from the old model and an input to the next model and the
-output. From this we can derive a property that for each input checks if
-the outputs of the stateful component agrees with the output of the
-state machine:
+This is where our in-memory reference implementation, or fake, comes in.
+We'll use a function of type `m -> i -> (m, o)`, i.e. from the old model
+and an input compute the next model and the output. From this we can
+derive a property that for each input checks if the outputs of the
+stateful component agrees with the output of the fake:
 
-       +------+     +------+     +------+
-       |      | i1  |      | i2  |      |
-       |  s0  +----->  s1  +----->  s2  | ...
-       |      |     |      |     |      |
-       +------+     +--++--+     +--++--+
-                       ||           ||
-                       ||o1         || o2
-                       ||           ||
-       +------+     +--++--+     +--++--+
-       |      | i1  |      | i2  |      |
-       |  m0  +----->  m1  +----->  m2  | ...
-       |      |     |      |     |      |
-       +------+     +------+     +------+
+             +------+     +------+     +------+
+             |      | i1  |      | i2  |      |
+     real:   |  s0  +----->  s1  +----->  s2  | ...
+             |      |     |      |     |      |
+             +------+     +--++--+     +--++--+
+                             ||           ||
+                             ||o1         || o2
+                             ||           ||
+             +------+     +--++--+     +--++--+
+             |      | i1  |      | i2  |      |
+     fake:   |  m0  +----->  m1  +----->  m2  | ...
+             |      |     |      |     |      |
+             +------+     +------+     +------+
+
+             ---------------------------------> time
 
 In case the outputs disagree we shrink the sequence of inputs and try to
 present the smallest counterexample, as in the pure case.
@@ -882,13 +885,13 @@ more concrete.
 
 We've already seen that the user needs to provide a way to generate
 single command, the only thing worth mentioning is that in case our
-commands contain references then during the generation phase we only
-deal with `Var`s of references, where `data Var a = Var Int`. The reason
-for this is that we cannot generate, for example, real file handles
-(only the operating system can), so instead we generate symbolic
-references which are just `Int`s. Think of these as placeholders for
-which real references will be substituted in once the real references
-are created during execution.
+commands contain references then during generation we only deal with
+`Var`s of references, where `data Var a = Var Int`. The reason for this
+is that we cannot generate, for example, real file handles (only the
+operating system can), so instead we generate "symbolic" references
+which are just `Int`s. Think of these as placeholders for which real
+references will be substituted in once the real references are created
+during execution.
 
 Shrinking of individual commands is optional and disabled by default,
 but as we've seen this doesn't exclude the sequence of commands to be
@@ -3005,6 +3008,9 @@ I'd like to thank Daniel Gustafsson for helping implement the
 fix for parallel commands generation
 [issue](https://github.com/stevana/quickcheck-state-machine/issues/51)
 that I found while writing this post, and for proofreading.
+
+I also want to thank Larry Diehl for proofreading and making several
+suggestions on how to improve the text and make it more readable.
 
 [^1]: Is there a source for this story? I can't remember where I've
     heard it. This short
