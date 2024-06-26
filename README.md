@@ -476,9 +476,9 @@ input got shrunk twice and the minimal counterexample `[0, 1]` is
 presented. Notice that we do need a list that is at least of length two,
 because any shorter list will reverse to itself.
 
-As pointed out earlier, coming up with these properties is by no means
-obvious. There are however a few patterns that come up over and over
-again. With `reverse` we saw an example of an involutory function, i.e.
+As pointed out earlier, coming up with these properties is not easy.
+There are however a few patterns that come up over and over again. With
+`reverse` we saw an example of an involutory function, i.e.
 `f (f x) == x`, here are a few other examples:
 
 - Inverses, e.g. `\(i :: Input) -> deserialise (serialise i) == i`;
@@ -539,8 +539,8 @@ history of inputs.
 
 In the pure case each test case is a single input, in the stateful case
 we need a sequence of inputs in order to test how the system changes
-over time. In the pure case our our properties were relations on the
-input and output, i.e. `R : i -> o -> Bool`. In the stateful case our
+over time. In the pure case our properties were relations on the input
+and output, i.e. `R : i -> o -> Bool`. In the stateful case our
 properties would need to be generalised to `R' : [i] -> [o] -> Bool` to
 account for how the state changes over time. Writing such properties is
 cumbersome, an alternative is to account for the state explicitly by
@@ -870,18 +870,18 @@ As part of the instantiating the user also needs to specify a type of
 of the counter and their response types respectively.
 
 In addition there's also three optional types, that we've not needed in
-the counter example. The first is references, these are used to refer
-back to previously created resources. For example if we open a file
-handle on a POSIX-like file system, then later commands need to be able
-to refer to that file handle when wanting to write or read from it. The
-second datatype is `PreconditionFailure`, which is used to give a nice
-error message when a command is executed in a disallowed state. For
-example if we try to read from a file handle that has been closed. The
-third data type is `CommandMonad` which let's us use a different monad
-than `IO` for executing our commands in. After we've finished with the
-interface definition we'll come back to more examples where we'll use
-these optional types, hopefully these examples will help make things
-more concrete.
+the counter example. The first is references, these are used to refer to
+previously created resources. For example if we open a file handle on a
+POSIX-like file system, then later commands need to be able to refer to
+that file handle when wanting to write or read from it. The second
+datatype is `PreconditionFailure`, which is used to give a nice error
+message when a command is executed in a disallowed state. For example if
+we try to read from a file handle that has been closed. The third data
+type is `CommandMonad` which let's us use a different monad than `IO`
+for executing our commands in. After we've finished with the interface
+definition we'll come back to more examples where we'll use these
+optional types, hopefully these examples will help make things more
+concrete.
 
 We've already seen that the user needs to provide a way to generate
 single command, the only thing worth mentioning is that in case our
@@ -1139,8 +1139,8 @@ from an empty queue then we'll get back uninitialised memory.
 
 ##### Model
 
-The circular buffer implementation is very efficient, because it reuses
-the allocated memory as we go around in circles, but it's not obviously
+The circular buffer implementation is efficient, because it reuses the
+allocated memory as we go around in circles, but it's not obviously
 correct.
 
 To model queues we'll use a more straight forward non-circular
@@ -1659,7 +1659,7 @@ time, then it appears to count correctly:
 3
 ```
 
-But if we instead concurrently issue the `incr`ements , we see something
+If we instead concurrently issue the `incr`ements, we see something
 strange:
 
 ``` haskell
@@ -2197,7 +2197,7 @@ then a failure is found:
                             Fork [Incr,Get],Fork [Incr,Incr],Fork [Get],
                             Fork [Incr]]
 
-But shrinking didn't work very well. The reason for this is that
+However, shrinking didn't work well. The reason for this is that
 QuickCheck tries a smaller test case (which still has the race
 condition), but because of a different interleaving of threads the race
 doesn't get triggered and so QuickCheck thinks it found the minimal test
@@ -2579,8 +2579,8 @@ When we run the tests we get rather long counterexamples:
           ParallelCommands [Fork [Spawn,WhereIs "a"],Fork [Spawn],
                             Fork [Register "c" (Var 1),Spawn],Fork [Register "e" (Var 2),Register "a" (Var 2)]]
 
-But if we replace our shared memory operations with version that do a
-bit of sleep beforehand:
+If we replace our shared memory operations with version that do a bit of
+sleep beforehand:
 
 ``` diff
 - import Data.IORef
@@ -2987,9 +2987,9 @@ it's what the original QuickCheck library is written in, but I think it
 would be good to translate code to other programming language paradigms,
 thus making it easier for others to learn and experiment. If anyone is
 interested in starting such a port to a different language, then I'd be
-happy to help. Feel free to open issues and ask questions in the the
-[code repository](https://github.com/stevana/stateful-pbt-with-fakes) of
-this post.
+happy to help. Feel free to open issues and ask questions in the [code
+repository](https://github.com/stevana/stateful-pbt-with-fakes) of this
+post.
 
 I've also writen down a bunch of
 [ideas](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/TODO.md)
@@ -3050,11 +3050,12 @@ suggestions on how to improve the text and make it more readable.
     have initialisation commands such as `New` which create a ticket
     dispenser reference upon which the later commands depend on, so
     without preconditions forbidding more than one `New` we can end up
-    generating: `Fork New New`, which doesn't make sense. It should also
-    be noted that making `New` fail gracefully when a `New` has already
-    been executed would need a global boolean flag, which is ugly.
+    generating: `Fork [New, New]`, which doesn't make sense. It should
+    also be noted that making `New` fail gracefully when a `New` has
+    already been executed would need a global boolean flag, which is
+    ugly.
 
-[^5]: The parallel counter example is very similar to the [ticket
+[^5]: The parallel counter example is similar to the [ticket
     dispenser](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/src/Example/TicketDispenser.hs)
     example that appears in John's paper [*Testing the hard stuff and
     staying
