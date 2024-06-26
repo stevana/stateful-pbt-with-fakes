@@ -2050,10 +2050,6 @@ runParallelCommands cmds0@(ParallelCommands forks0) = do
         Right resp -> do
           -- NOTE: It's important that we extend the environment before writing `Ok`
           -- to the history, otherwise we might get scope issues.
-
-          -- XXX: Move outside of mapConcurrently? How do we assign the right `Var`
-          -- with each `Reference`? Perhaps this would be easier if we had a prefix
-          -- and N suffixes?
           env' <- extendEnvParallel env c (toList resp)
           atomically (writeTQueue q (Ok pid resp))
           return env'
