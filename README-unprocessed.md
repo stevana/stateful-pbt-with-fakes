@@ -1925,7 +1925,7 @@ second:
 If we want to integration test component $A$ and $B$ then we first need to start
 or enable component $B$ and then start testing component $A$. In a larger system
 there can be many dependencies and integration tests can get slow and flaky due
-to the infrastructure for starting up the dependendencies.
+to the infrastructure for starting up the dependencies.
 
 With fakes we can get fast and deterministic integration tests by depending on
 the fake of the dependency instead of the real dependency:
@@ -2122,19 +2122,11 @@ at several examples of how we can use fakes as models and how to test bigger
 systems in a compositional manner by reusing the fakes.
 
 I hope that this is enough material to get people curious and experimenting in
-other programming languages. I used Haskell, because it's what the original
-QuickCheck library is written in, but I think it would be good to translate code
-to other programming language paradigms, thus making it easier for others to
-learn and experiment. If anyone is interested in starting such a port to a
-different language, then I'd be happy to help. Feel free to open issues and ask
-questions in the [code
-repository](https://github.com/stevana/stateful-pbt-with-fakes) of this post.
-
-I've also writen down a bunch of
-[ideas](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/TODO.md)
-for improvements and further exploration, in case anyone's interested in digging
-deeper into this topic (again, happy to elaborate, feel free to get [in
-touch](https://stevana.github.io/about.html)).
+their favorite programming languages[^10]. Feel free to get [in
+touch](https://stevana.github.io/about.html) or open an
+[issue](https://github.com/stevana/stateful-pbt-with-fakes) in case there's
+anything I can help with. Who knows, together, we might even be able to slightly
+improve the state of property-based testing libraries!
 
 ## Acknowledgments
 
@@ -2224,3 +2216,8 @@ on how to improve the text and make it more readable.
 [^9]: See the talk [Integrated Tests Are A
     Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger for a
     longer presentation of this idea.
+
+[^10]: In the unlikely case that there's someone out there who wants to dig even
+    deeper into this topic, then I've compiled a list of
+    [ideas](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/TODO.md)
+    for improvements and further exploration.
