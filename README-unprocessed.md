@@ -1902,20 +1902,60 @@ first to propose the use of fakes instead of state machine specifications with
 post-conditions. Edsko also showed how one can implement fake-based
 specifications on top of a library that uses state machine specifications[^7].
 
-Using fakes instead of state machine specifications with post-conditions is not
-only easier for programmers unfamiliar with formal specification, but there are
-other advantages as well. For example we can use this fake in integration tests
-with components that depend on the software that we tested with the fake.
+Using fakes instead of state machine specifications with post-conditions is
+easier for programmers unfamiliar with formal specifications, because most
+programmers are already familiar with mocks and fakes are
+[similar](https://martinfowler.com/bliki/TestDouble.html) to mocks.
+
+There are other advantages to using fakes, for example we can use this fake in
+integration tests with components that depend on the software that we tested
+with the fake.
+
+Imagine a situation where we have two components with the first depending on the
+second:
+
+```
+   +--------+              +---------+
+   |        |  depends on  |         |
+   | Real A +------------->|  Real B |
+   |        |              |         |
+   +--------+              +---------+
+```
+
+If we want to integration test component $A$ and $B$ then we first need to start
+or enable component $B$ and then start testing component $A$. In a larger system
+there can be many dependencies and integration tests can get slow and flaky due
+to the infrastructure for starting up the dependendencies.
+
+With fakes we can get fast and deterministic integration tests by depending on
+the fake of the dependency instead of the real dependency:
+
+```
+   +--------+              +---------+
+   |        |  depends on  |         |
+   | Real A +------------->|  Fake B |
+   |        |              |         |
+   +--------+              +---------+
+```
 
 One of the problems with integration testing against fakes is that the fake can
 be wrong. The standard solution to solve that problem is to [contract
 test](https://martinfowler.com/bliki/ContractTest.html) the fake to make sure
 that it is faithful to the software it's supposed to be a fake of. We don't have
-this problem, because our tests assure that the fake is faithful.
+this problem, because our stateful and parallel property-based tests assure that
+the fake is faithful:
 
-This, final, section is about unpacking and giving examples of how integration
-testing against fakes works. Hopefully this shows how the testing methodology
-that we've explored in this post can be scaled to a bigger system of components.
+```
+   +--------+                  +---------+
+   |        |  tested against  |         |
+   | Real B +----------------->|  Fake B |
+   |        | (contract test)  |         |
+   +--------+                  +---------+
+```
+
+In this, final, section we'll look at examples of how integration testing
+against fakes works. Hopefully this shows how the testing methodology that we've
+explored in this post can be scaled to a bigger system of components.
 
 #### Example: queue (again)
 
@@ -1949,8 +1989,8 @@ is faithful to the real implementation.
 
 #### Example: file system
 
-The next example is a file system, first used by Edsko de Vries in the
-[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019) that also
+The next example is a file system, first used by Edsko in the
+[post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) that also
 introduced using fakes as models.
 
 The interface is parametrised by a file handle. We can create directories, open
@@ -2008,7 +2048,24 @@ test suite using database commands and responses, it's those tests that do the
 integration testing between the database and the fake file system, while the
 stateful and parallel property-based tests of the file system alone do the
 contract tests that ensure that the file system fake is faithful to the real
-file system.
+file system. The picture looks like this, where "DB" is the database and "FS" is
+the file system:
+
+```
+   +---------+              +----------+
+   |         |  depends on  |          |
+   | Real DB +------------->|  Fake FS |
+   |         |              |          |
+   +----+----+              +----------+
+        |
+        | tested against
+        v
+   +---------+
+   |         |
+   | Fake DB |
+   |         |
+   +---------+
+```
 
 #### Example: bigger system of components
 
