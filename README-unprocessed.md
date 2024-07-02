@@ -1,7 +1,5 @@
 # The sad state of property-based testing libraries
 
-*Work in progress, please don't share, but do get involved!*
-
 Property-based testing is a rare example of academic research that has made it
 to the mainstream in less than 30 years. Under the slogan "don't write tests,
 generate them" property-based testing has gained support from a diverse group of
