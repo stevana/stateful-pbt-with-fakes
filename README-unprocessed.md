@@ -152,7 +152,7 @@ how well supported these two testing features are. Let me be clear up front that
 I've not used all of these libraries. My understanding comes from reading the
 documentation, issue tracker and sometimes source code.
 
-To my best knowledge, as of June 2024, the following table summarises the
+To my best knowledge, as of July 2024, the following table summarises the
 situation. Please open an
 [issue](https://github.com/stevana/stateful-pbt-with-fakes/issues), PR, or get
 in [touch](https://stevana.github.io/about.html) if you see a mistake or an
@@ -160,6 +160,7 @@ important omission.
 
 | Library | Language | Stateful | Parallel | Notes |
 | :---    | :---     | :---:    | :---:    | :---  |
+| CsCheck | C# | ☒ | ☒ | |
 | Eris | PHP | ☐ | ☐ | |
 | FsCheck | F# | ☒ | ☐ | Has experimental [stateful testing](https://fscheck.github.io/FsCheck//StatefulTestingNew.html). An [issue](https://github.com/fscheck/FsCheck/issues/214) to add parallel support has been open since 2016. |
 | Gopter | Go | ☒ | ☐ | The README says "No parallel commands ... yet?" and there's an open [issue](https://github.com/leanovate/gopter/issues/20) from 2017. |
@@ -186,7 +187,9 @@ important omission.
 | quickcheck-state-machine | Haskell | ☒ | ☒ | Second open source library with parallel testing support? (I was [involved](https://github.com/nick8325/quickcheck/issues/139#issuecomment-272439099) in the development.) |
 | rackcheck | Racket | ☐ | ☐ |  |
 | rantly | Ruby | ☐ | ☐ | |
+| stateful-check | Clojure | ☒ | ☒ | |
 | test.check | Clojure | ☐ | ☐ | Someone has implemented stateful testing in a blog [post](http://blog.guillermowinkler.com/blog/2015/04/12/verifying-state-machine-behavior-using-test-dot-check/) though. |
+| test.contract | Clojure | ☒ | ☐ | |
 | theft | C | ☐ | ☐ | |
 
 ## Analysis
