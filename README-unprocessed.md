@@ -2142,6 +2142,35 @@ found while writing this post, and for proofreading.
 I also want to thank Larry Diehl for proofreading and making several suggestions
 on how to improve the text and make it more readable.
 
+## Discussions and follow-ups
+
+The post generated comments in various places:
+
+* HackerNews [comments](https://news.ycombinator.com/item?id=40875559);
+* Lobsters
+  [comments](https://lobste.rs/s/uutqvn/sad_state_property_based_testing);
+* r/programming
+  [comments](https://old.reddit.com/r/programming/comments/1duamq2/the_sad_state_of_propertybased_testing_libraries/);
+* r/haskell
+  [comments](https://old.reddit.com/r/haskell/comments/1duam7a/the_sad_state_of_propertybased_testing_libraries/);
+* Haskell discourse
+  [comments](https://discourse.haskell.org/t/the-sad-state-of-property-based-testing-libraries/9880).
+
+It also seem to have inspired some follow-up posts:
+
+* Alex "matklad" Kladov expanded his Lobsters comments into a full
+  [post](https://matklad.github.io/2024/07/05/properly-testing-concurrent-data-structures.html)
+  about how to do deterministic scheduling of threads in Rust;
+* Anthony Lloyd
+  [wrote](https://anthonylloyd.github.io/blog/2024/07/07/cscheck-happy-state)
+  about the happy state of property-based testing in C# in general, and about
+  some innovative functionality in CsCheck in particular;
+* Pierre "ibizaman" Penninckx
+  [commented](https://discourse.haskell.org/t/the-sad-state-of-property-based-testing-libraries/9880/20)
+  that the post made him write a [follow
+  up](https://blog.tiserbox.com/posts/2024-07-08-make-good-stubs-with-stateful-property-testing.html)
+  to one of his own earlier posts about stateful property-based testing in Go.
+
 
 [^1]: Is there a source for this story? I can't remember where I've heard it.
     This short
