@@ -24,7 +24,13 @@ Here are a bunch of idea I think are worth exploring:
    paper? Perhaps this is easier in other programming languages, e.g. via Rust's
    [tokio
    library](https://risingwave.com/blog/deterministic-simulation-a-new-era-of-distributed-system-testing/)
-   or via multicore OCaml's effect handlers?
+   or via multicore OCaml's effect handlers? See the following
+   [post](https://matklad.github.io/2024/07/05/properly-testing-concurrent-data-structures.html)
+   by matklad and the following
+   [talk](https://www.youtube.com/watch?v=ms8zKpS_dZE) by Antonio Scandurra for
+   how one can do it in Rust, and this
+   [module](https://github.com/stevana/deterministic-scheduler/blob/main/src/ManagedThread2.hs)
+   for a possible starting point in Haskell.
 4. When there's a mismatch between the fake and the real system in the
    sequential case, we get a nice trace of what commands and state changes lead
    to the mismatch. In the concurrent case we didn't implement any such

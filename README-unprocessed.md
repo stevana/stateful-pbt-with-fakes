@@ -1664,7 +1664,7 @@ that the shrinker picked, passes).
 
 The proper solution to this problem is to use a deterministic thread scheduler,
 this is what they do the parallel testing
-[paper](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf).
+[paper](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)[^6].
 A simpler workaround is to introduce a small sleep after each read or write to
 shared memory, this will make it more likely that the same interleaving happens
 when we shrink the test:
@@ -1695,7 +1695,7 @@ and the introduction of sleep is only needed to make the counterexample smaller.
 #### Example: process registry
 
 For a slightly more complicated example containing race conditions, let's have a
-look at an implementation of the Erlang process registry[^6].
+look at an implementation of the Erlang process registry[^7].
 
 ##### Software under test
 
@@ -1903,7 +1903,7 @@ As far as I know, Edsko de Vries'
 [post](https://www.well-typed.com/blog/2019/01/qsm-in-depth/) (2019) was the
 first to propose the use of fakes instead of state machine specifications with
 post-conditions. Edsko also showed how one can implement fake-based
-specifications on top of a library that uses state machine specifications[^7].
+specifications on top of a library that uses state machine specifications[^8].
 
 Using fakes instead of state machine specifications with post-conditions is
 easier for programmers unfamiliar with formal specifications, because most
@@ -2073,7 +2073,7 @@ the file system:
 #### Example: bigger system of components
 
 The examples given above, a queue and a file system, might not seems necessary
-to fake[^8] so to finish of let's sketch how the same technique scales to a
+to fake[^9] so to finish of let's sketch how the same technique scales to a
 bigger system of components or services.
 
 Imagine we have three components or services, where component *A* depends on
@@ -2114,7 +2114,7 @@ The testing strategy is then as follows:
 3. Use B fake (which uses the C fake) when testing A.
 
 Hopefully it should be clear that this strategy scales to more components or
-services[^9].
+services[^10].
 
 ## Conclusion and future work
 
@@ -2125,7 +2125,7 @@ at several examples of how we can use fakes as models and how to test bigger
 systems in a compositional manner by reusing the fakes.
 
 I hope that this is enough material to get people curious and experimenting in
-their favorite programming languages[^10]. Feel free to get [in
+their favorite programming languages[^11]. Feel free to get [in
 touch](https://stevana.github.io/about.html) or open an
 [issue](https://github.com/stevana/stateful-pbt-with-fakes) in case there's
 anything I can help with. Who knows, together, we might even be able to slightly
@@ -2220,8 +2220,11 @@ It also seem to have inspired some follow-up posts:
     example that appears in John's paper [*Testing the hard stuff and staying
     sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
     (2014).
-
-[^6]: The sequential variant of the process registry example first appeared in
+[^6]: For how to implement a deterministic scheduler, see matklad's
+    [post](https://matklad.github.io/2024/07/05/properly-testing-concurrent-data-structures.html).
+    I've also started porting his ideas to Haskell over
+    [here](https://github.com/stevana/deterministic-scheduler/blob/main/src/ManagedThread2.hs).
+[^7]: The sequential variant of the process registry example first appeared in
     the paper [*QuickCheck testing for fun and
     profit*](https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=5ae25681ff881430797268c5787d7d9ee6cf542c)
     (2007) and is also part of John's Midlands Graduate School course (2019).
@@ -2230,12 +2233,12 @@ It also seem to have inspired some follow-up posts:
     PULSE*](https://www.cse.chalmers.se/~nicsma/papers/finding-race-conditions.pdf)
     (2009).
 
-[^7]: I believe the post-condition formulation is more general, as it allows a
+[^8]: I believe the post-condition formulation is more general, as it allows a
     relational rather than a functional specification. So I don't think we can
     show the converse of what Edsko did, i.e. implement a post-condition style
     specification on top of our fake-based one.
 
-[^8]: Unless we want to test what happens when failures, such as the disk being
+[^9]: Unless we want to test what happens when failures, such as the disk being
     full etc.
     [Research](http://www.eecg.toronto.edu/~yuan/papers/failure_analysis_osdi14.pdf)
     shows that "almost all (92%) of the catastrophic system failures are the
@@ -2245,11 +2248,11 @@ It also seem to have inspired some follow-up posts:
     code.". Fakes make it easier to inject faults, but that's a story for
     another day.
 
-[^9]: See the talk [Integrated Tests Are A
+[^10]: See the talk [Integrated Tests Are A
     Scam](https://www.youtube.com/watch?v=fhFa4tkFUFw) by J.B. Rainsberger for a
     longer presentation of this idea.
 
-[^10]: In the unlikely case that there's someone out there who wants to dig even
+[^11]: In the unlikely case that there's someone out there who wants to dig even
     deeper into this topic, then I've compiled a list of
     [ideas](https://github.com/stevana/stateful-pbt-with-fakes/blob/main/TODO.md)
     for improvements and further exploration.
