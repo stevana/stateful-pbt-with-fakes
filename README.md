@@ -3135,10 +3135,8 @@ It also seem to have inspired some follow-up posts:
     sane*](https://publications.lib.chalmers.se/records/fulltext/232550/local_232550.pdf)
     (2014).
 
-[^6]: For how to implement a deterministic scheduler, see matklad's
-    [post](https://matklad.github.io/2024/07/05/properly-testing-concurrent-data-structures.html).
-    I've also started porting his ideas to Haskell over
-    [here](https://github.com/stevana/deterministic-scheduler/blob/main/src/ManagedThread2.hs).
+[^6]: For how to implement a deterministic scheduler, see my follow up
+    [post](https://stevana.github.io/parallel_property-based_testing_with_a_deterministic_thread_scheduler.html).
 
 [^7]: The sequential variant of the process registry example first
     appeared in the paper [*QuickCheck testing for fun and
